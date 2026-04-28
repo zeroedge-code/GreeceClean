@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+build/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / tooling
+.vscode/
+.idea/
+.claude/
+tsconfig.tsbuildinfo
+
+# Supabase local
+supabase/.branches
+supabase/.temp

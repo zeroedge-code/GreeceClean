@@ -1,10 +1,7 @@
 import type { Metadata } from 'next'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { SEED_REPORTS } from '@/lib/seed-data'
-
-export const metadata: Metadata = {
-  title: 'Παρακολούθηση Αναφοράς – GreeceClean',
-}
+import CopyButton from '@/components/CopyButton'
 
 const CATEGORY_LABELS: Record<string, string> = {
   illegal_dump:      'Παράνομη Χωματερή',
@@ -14,12 +11,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   other:             'Άλλο',
 }
 
-// Public-facing 4-step progress — maps each step to the DB statuses that satisfy it
 const STEPS = [
-  { label: 'Υποβλήθηκε',   done: (_: string) => true },
-  { label: 'Επαληθεύτηκε', done: (s: string) => ['in_review', 'forwarded', 'resolved'].includes(s) },
-  { label: 'Ειδοποιήθηκε', done: (s: string) => ['forwarded', 'resolved'].includes(s) },
-  { label: 'Καθαρίστηκε',  done: (s: string) => s === 'resolved' },
+  { label: 'Υποβλήθηκε',        done: (_: string) => true },
+  { label: 'Επαληθεύτηκε',      done: (s: string) => ['in_review', 'forwarded', 'resolved'].includes(s) },
+  { label: 'Ειδοποιήθηκε ο Δήμος', done: (s: string) => ['forwarded', 'resolved'].includes(s) },
+  { label: 'Καθαρίστηκε',       done: (s: string) => s === 'resolved' },
 ]
 
 type Report = {
@@ -43,8 +39,52 @@ async function getReport(token: string): Promise<Report | null> {
       .single()
     if (data) return data as unknown as Report
   }
-  // Fall back to seed data (used when Supabase is not yet configured)
   return SEED_REPORTS.find((r) => r.public_token === token) ?? null
+}
+
+function appUrl() {
+  return process.env.NEXT_PUBLIC_APP_URL ?? 'https://greececlean.gr'
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>
+}): Promise<Metadata> {
+  const { token } = await params
+  const report = await getReport(token)
+
+  if (!report) {
+    return { title: 'Αναφορά δεν βρέθηκε – GreeceClean' }
+  }
+
+  const category  = CATEGORY_LABELS[report.category] ?? report.category
+  const place     = report.municipality?.name_el ?? 'Ελλάδα'
+  const title     = `${category} – ${place}`
+  const desc      = report.description
+    ?? `Αναφορά ρύπανσης στον ${place}. Παρακολούθησε την πρόοδο στο GreeceClean.`
+  const url       = `${appUrl()}/r/${token}`
+
+  return {
+    title: `${title} | GreeceClean`,
+    description: desc,
+    openGraph: {
+      title,
+      description: desc,
+      url,
+      locale: 'el_GR',
+      type: 'website',
+      ...(report.image_url && {
+        images: [{ url: report.image_url, width: 1200, height: 630, alt: title }],
+      }),
+    },
+    twitter: {
+      card: report.image_url ? 'summary_large_image' : 'summary',
+      title,
+      description: desc,
+      ...(report.image_url && { images: [report.image_url] }),
+    },
+  }
 }
 
 export default async function TrackingPage({
@@ -69,25 +109,47 @@ export default async function TrackingPage({
     )
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://greececlean.gr'
-  const trackingUrl = `${appUrl}/r/${report.public_token}`
-  const whatsappText = encodeURIComponent(`Δες αυτή την αναφορά ρύπανσης στο GreeceClean:\n${trackingUrl}`)
-  const isRejected = report.status === 'rejected'
+  const trackingUrl   = `${appUrl()}/r/${report.public_token}`
+  const whatsappText  = encodeURIComponent(`Δες αυτή την αναφορά ρύπανσης στο GreeceClean:\n${trackingUrl}`)
+  const isRejected    = report.status === 'rejected'
+
+  // OpenStreetMap embed bbox: ±0.008° lng, ±0.006° lat around the pin
+  const bbox = [
+    (report.lng - 0.008).toFixed(5),
+    (report.lat - 0.006).toFixed(5),
+    (report.lng + 0.008).toFixed(5),
+    (report.lat + 0.006).toFixed(5),
+  ].join('%2C')
+  const osmSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${report.lat.toFixed(5)}%2C${report.lng.toFixed(5)}`
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-lg mx-auto space-y-6">
+      <div className="max-w-lg mx-auto space-y-5">
         <h1 className="text-2xl font-bold text-primary">Κατάσταση Αναφοράς</h1>
 
-        {/* Photo + details */}
-        <div className="card">
-          {report.image_url && (
+        {/* Photo */}
+        {report.image_url && (
+          <div className="rounded-2xl overflow-hidden shadow-sm">
             <img
               src={report.image_url}
               alt="Φωτογραφία αναφοράς"
-              className="w-full rounded-2xl object-cover max-h-64 mb-4"
+              className="w-full object-cover max-h-72"
             />
-          )}
+          </div>
+        )}
+
+        {/* Map */}
+        <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm h-52">
+          <iframe
+            title="Τοποθεσία αναφοράς"
+            src={osmSrc}
+            className="w-full h-full border-0"
+            loading="lazy"
+          />
+        </div>
+
+        {/* Details */}
+        <div className="card">
           <dl className="text-sm text-gray-600 space-y-1.5">
             <div className="flex gap-2">
               <dt className="font-medium shrink-0">Κατηγορία:</dt>
@@ -99,10 +161,6 @@ export default async function TrackingPage({
                 <dd>{report.municipality.name_el}</dd>
               </div>
             )}
-            <div className="flex gap-2">
-              <dt className="font-medium shrink-0">Συντεταγμένες:</dt>
-              <dd className="font-mono text-xs">{report.lat.toFixed(5)}, {report.lng.toFixed(5)}</dd>
-            </div>
             <div className="flex gap-2">
               <dt className="font-medium shrink-0">Υποβλήθηκε:</dt>
               <dd>{new Date(report.created_at).toLocaleDateString('el-GR')}</dd>
@@ -125,30 +183,24 @@ export default async function TrackingPage({
           </div>
         )}
 
-        {/* 4-step progress stepper */}
+        {/* Progress stepper */}
         {!isRejected && (
           <div className="card">
             <h2 className="font-semibold text-primary mb-6">Πρόοδος</h2>
             <ol className="relative ml-3 space-y-0">
               {STEPS.map((step, i) => {
-                const done = step.done(report.status)
+                const done   = step.done(report.status)
                 const isLast = i === STEPS.length - 1
                 return (
                   <li key={step.label} className={`relative flex gap-4 ${!isLast ? 'pb-7' : ''}`}>
-                    {/* Vertical connector line */}
                     {!isLast && (
                       <span
-                        className={`absolute left-3.5 top-7 bottom-0 w-0.5 -translate-x-1/2 ${
-                          done ? 'bg-action' : 'bg-gray-200'
-                        }`}
+                        className={`absolute left-3.5 top-7 bottom-0 w-0.5 -translate-x-1/2 ${done ? 'bg-action' : 'bg-gray-200'}`}
                       />
                     )}
-                    {/* Step circle */}
                     <span
                       className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
-                        done
-                          ? 'bg-action border-action text-white'
-                          : 'bg-white border-gray-300 text-gray-400'
+                        done ? 'bg-action border-action text-white' : 'bg-white border-gray-300 text-gray-400'
                       }`}
                     >
                       {done ? '✓' : i + 1}
@@ -179,12 +231,10 @@ export default async function TrackingPage({
               </svg>
               Κοινοποίηση στο WhatsApp
             </a>
-            <a
-              href={trackingUrl}
-              className="text-center text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors"
-            >
-              {trackingUrl}
-            </a>
+
+            <CopyButton url={trackingUrl} />
+
+            <p className="text-center text-xs text-gray-400 break-all">{trackingUrl}</p>
           </div>
         </div>
       </div>

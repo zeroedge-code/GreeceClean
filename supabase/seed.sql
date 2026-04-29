@@ -271,3 +271,167 @@ VALUES (
   '2023-12-07 14:00:00+03'
 )
 ON CONFLICT (public_token) DO NOTHING;
+
+-- ─────────────────────────────────────────
+-- ADDITIONAL MUNICIPALITIES (scandals batch)
+-- ─────────────────────────────────────────
+INSERT INTO municipalities (name_el, name_en, email_official)
+SELECT v.name_el, v.name_en, v.email_official
+FROM (VALUES
+  ('Δήμος Ζακυνθίων',       'Municipality of Zakynthos',      'info@zakynthos.gov.gr'),
+  ('Δήμος Ιθάκης',          'Municipality of Ithaka',         'info@ithaki.gr'),
+  ('Δήμος Λοκρών',          'Municipality of Lokri',          'info@dimosmalesinas.gr'),
+  ('Δήμος Καβάλας',         'Municipality of Kavala',         'info@kavala.gr'),
+  ('Δήμος Λαρισαίων',       'Municipality of Larissa',        'info@larissa.gr'),
+  ('Δήμος Σπάρτης',         'Municipality of Sparta',         'info@sparti.gr'),
+  ('Δήμος Ασπροπύργου',     'Municipality of Aspropyrgos',    'info@aspropyrgos.gr'),
+  ('Δήμος Αλεξανδρούπολης', 'Municipality of Alexandroupoli', 'info@alexandroupolis.gov.gr')
+) AS v(name_el, name_en, email_official)
+WHERE NOT EXISTS (
+  SELECT 1 FROM municipalities m WHERE m.name_el = v.name_el
+);
+
+-- ─────────────────────────────────────────
+-- SCANDAL REPORTS  (batch 2, 10 entries)
+-- Sources: investigative journalism & EU environmental complaints 2021-2025
+-- ─────────────────────────────────────────
+
+-- 18. Ζάκυνθος – Τοξικά βαρέλια στην παραλία Λαγανά
+--     Barrels of unknown toxic substances washed ashore near Caretta caretta nesting beach.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'f1a2b3c4d5e6',
+  'https://picsum.photos/seed/180/800/600',
+  37.7284, 20.9003,
+  'illegal_dump', 'in_review', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Ζακυνθίων'),
+  'Βρέθηκαν τουλάχιστον 6 τοξικά βαρέλια αγνώστου περιεχομένου στην παραλία ωοτοκίας καρέτα-καρέτα στη Λαγανά.',
+  '2023-07-18 08:40:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 19. Ιθάκη – Φάρμες-φάντασμα & εγκαταλελειμμένα κτηνοτροφικά απόβλητα
+--     Abandoned livestock farm with rotting feed and chemical containers; EU subsidy fraud case.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'e1f2a3b4c5d6',
+  'https://picsum.photos/seed/190/800/600',
+  38.3736, 20.7103,
+  'illegal_dump', 'pending', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Ιθάκης'),
+  'Εγκαταλελειμμένη κτηνοτροφική μονάδα με δεκάδες βαρέλια χημικών λιπασμάτων και σάπια ζωοτροφή εκτεθειμένα στο περιβάλλον.',
+  '2022-09-05 10:15:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 20. Καμένα Βούρλα (Δήμος Λοκρών) – Ανεπεξέργαστα λύματα στη θάλασσα
+--     Raw sewage discharged directly into the therapeutic sea bay; EU infringement 2021.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'd1e2f3a4b5c6',
+  'https://picsum.photos/seed/200/800/600',
+  38.7737, 22.7941,
+  'other', 'forwarded', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Λοκρών'),
+  'Άμεση απόρριψη αδιύλιστων αστικών λυμάτων στον κόλπο θαλασσοθεραπείας. Υπόθεση κοινοτικής παράβασης (EU infringement 2021/2268).',
+  '2021-11-12 14:30:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 21. Ασπρόπυργος – Παράνομη χωματερή ηλεκτρονικών αποβλήτων (e-waste)
+--     Dozens of refrigerators, monitors and batteries dumped on industrial scrubland.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'c1d2e3f4a5b6',
+  'https://picsum.photos/seed/210/800/600',
+  38.0631, 23.5982,
+  'illegal_dump', 'in_review', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Ασπροπύργου'),
+  'Εκατοντάδες παλιά ψυγεία, οθόνες και μπαταρίες αυτοκινήτων απορριμμένα σε αδόμητη βιομηχανική έκταση χωρίς περιβαλλοντική αδειοδότηση.',
+  '2024-05-03 09:00:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 22. Λάρισα – Μπάζα κατασκευών μετά τις πλημμύρες Daniel (2023)
+--     Post-flood construction debris dumped illegally on Pineios riverbank.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'b1c2d3e4f5a6',
+  'https://picsum.photos/seed/220/800/600',
+  39.6378, 22.4176,
+  'illegal_dump', 'pending', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Λαρισαίων'),
+  'Τεράστια ποσότητα μπαζών από κατεδαφίσεις μετά τις πλημμύρες Daniel απορρίφθηκε παράνομα στις όχθες του Πηνειού.',
+  '2023-10-14 11:00:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 23. Ηράκλειο – Εκατοντάδες ελαστικά στις ακτές Κόκκινου Χανιού
+--     Hundreds of tyres buried/abandoned near the beach; cleaned up after citizen pressure.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'a6b5c4d3e2f1',
+  'https://picsum.photos/seed/230/800/600',
+  35.3590, 25.2100,
+  'illegal_dump', 'resolved', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Ηρακλείου'),
+  'Περίπου 300 μεταχειρισμένα ελαστικά θαμμένα σε παραθαλάσσια ζώνη κοντά στο Κόκκινο Χάνι. Καθαρίστηκαν μετά από εκστρατεία πολιτών.',
+  '2023-04-22 07:30:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 24. Καβάλα – Βιομηχανικά υγρά απόβλητα κοντά στον Στρυμόνα
+--     Industrial wastewater illegally discharged near Strymon river delta; fish kill reported.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'f6e5d4c3b2a1',
+  'https://picsum.photos/seed/240/800/600',
+  40.9395, 24.4022,
+  'other', 'forwarded', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Καβάλας'),
+  'Παράνομη απόρριψη βιομηχανικών υγρών αποβλήτων σε αγροτική τάφρο που χύνεται στο δέλτα Στρυμόνα. Μαζική ψαροκτονία σε ακτίνα 2 χλμ.',
+  '2022-06-10 16:00:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 25. Αλεξανδρούπολη – Πλαστικά μίας χρήσης στις ακτές Μάκρης
+--     Single-use plastic accumulation on Blue Flag beach; NGO beach clean-up 2024.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'e6f5a4b3c2d1',
+  'https://picsum.photos/seed/250/800/600',
+  40.8584, 25.8731,
+  'roadside_litter', 'resolved', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Αλεξανδρούπολης'),
+  'Συσσώρευση πλαστικών μίας χρήσης σε Γαλάζια Σημαία παραλία. Εθελοντική εκστρατεία καθαρισμού Ιούνιος 2024.',
+  '2024-06-05 09:30:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 26. Πάτρα – Εγκαταλελειμμένα οχήματα κοντά στη Γέφυρα Ρίου-Αντιρρίου
+--     12 vehicles without plates abandoned on approach roads to Rio-Antirrio bridge.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'd6e5f4a3b2c1',
+  'https://picsum.photos/seed/260/800/600',
+  38.2520, 21.7670,
+  'abandoned_vehicle', 'in_review', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Πατρέων'),
+  'Δώδεκα οχήματα χωρίς πινακίδες εγκαταλελειμμένα στις παρόδους της Γέφυρας Ρίου-Αντιρρίου, παρεμποδίζοντας την κυκλοφορία.',
+  '2024-02-28 13:45:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;
+
+-- 27. Σπάρτη – Βανδαλισμός σε αρχαιολογικό χώρο
+--     Graffiti and structural damage to walls of ancient Spartan acropolis; prosecution 2023.
+INSERT INTO reports (public_token, image_url, lat, lng, category, status, is_approved, municipality_id, description, created_at)
+VALUES (
+  'c6d5e4f3a2b1',
+  'https://picsum.photos/seed/270/800/600',
+  37.0762, 22.4318,
+  'vandalism', 'resolved', true,
+  (SELECT id FROM municipalities WHERE name_el = 'Δήμος Σπάρτης'),
+  'Γκράφιτι και φθορές σε αρχαία τοιχοποιία της Σπαρτιατικής Ακρόπολης. Εντοπίστηκαν δύο δράστες και παραπέμφθηκαν σε δίκη.',
+  '2023-09-01 10:00:00+03'
+)
+ON CONFLICT (public_token) DO NOTHING;

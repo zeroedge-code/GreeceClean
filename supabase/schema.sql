@@ -89,6 +89,12 @@ create trigger reports_updated_at
 alter table municipalities enable row level security;
 alter table reports enable row level security;
 
+-- Public: read all municipalities (names are public data)
+drop policy if exists "Public can read municipalities" on municipalities;
+create policy "Public can read municipalities"
+  on municipalities for select
+  using (true);
+
 -- Public: read approved reports only
 drop policy if exists "Public can read approved reports" on reports;
 create policy "Public can read approved reports"

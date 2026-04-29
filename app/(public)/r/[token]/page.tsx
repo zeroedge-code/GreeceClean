@@ -90,10 +90,6 @@ export default async function TrackingPage({
           )}
           <dl className="text-sm text-gray-600 space-y-1.5">
             <div className="flex gap-2">
-              <dt className="font-medium shrink-0">Token:</dt>
-              <dd className="font-mono text-xs text-gray-400 break-all">{report.public_token}</dd>
-            </div>
-            <div className="flex gap-2">
               <dt className="font-medium shrink-0">Κατηγορία:</dt>
               <dd>{CATEGORY_LABELS[report.category] ?? report.category}</dd>
             </div>

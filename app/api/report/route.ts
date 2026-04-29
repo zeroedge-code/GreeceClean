@@ -35,7 +35,7 @@ function originOf(req: NextRequest): string {
 // Tries exact match first, then partial (e.g. "Αθήνα" inside "Δήμος Αθηναίων"),
 // then falls back to inserting a new row so every region is captured automatically.
 async function resolveMunicipalityId(name: string): Promise<string | null> {
-  if (!name || name === 'Άγνωστος Δήμος') return null
+  if (!name) return null
 
   // 1 — exact case-insensitive match
   const { data: exact } = await supabaseAdmin

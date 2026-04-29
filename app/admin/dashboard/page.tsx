@@ -69,14 +69,22 @@ export default async function AdminDashboard() {
             <h1 className="text-3xl font-bold text-primary">Πίνακας Διαχείρισης</h1>
             <p className="text-sm text-gray-500 mt-1">Διαχείριση αναφορών χρηστών</p>
           </div>
-          <form action="/api/admin/logout" method="POST">
-            <button
-              type="submit"
+          <div className="flex items-center gap-3">
+            <a
+              href="/admin/municipalities"
               className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border hover:bg-gray-50"
             >
-              Αποσύνδεση
-            </button>
-          </form>
+              Δήμοι & Email
+            </a>
+            <form action="/api/admin/logout" method="POST">
+              <button
+                type="submit"
+                className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border hover:bg-gray-50"
+              >
+                Αποσύνδεση
+              </button>
+            </form>
+          </div>
         </div>
 
         <section className="mb-10">

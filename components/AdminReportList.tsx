@@ -14,10 +14,23 @@ export type AdminReport = {
   is_approved: boolean
   created_at: string
   description: string | null
+  municipality_id: string | null
   municipality: { name_el: string } | null
 }
 
+export type Municipality = {
+  id: string
+  name_el: string
+}
+
 type Mode = 'pending' | 'approved' | 'rejected'
+
+type EditDraft = {
+  category: string
+  status: string
+  municipality_id: string
+  description: string
+}
 
 const CATEGORIES: Record<string, string> = {
   illegal_dump:      'Παράνομη Χωματερή',
@@ -49,19 +62,25 @@ const EMPTY_MESSAGES: Record<Mode, string> = {
   rejected: 'Δεν υπάρχουν απορριφθείσες αναφορές',
 }
 
+const SELECT_CLS = 'border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white'
+
 export default function AdminReportList({
   reports,
+  municipalities = [],
   mode = 'pending',
 }: {
   reports: AdminReport[]
+  municipalities?: Municipality[]
   mode?: Mode
 }) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editDraft, setEditDraft] = useState<{ category: string; status: string }>({
+  const [editDraft, setEditDraft] = useState<EditDraft>({
     category: '',
     status: '',
+    municipality_id: '',
+    description: '',
   })
 
   async function runAction(id: string, method: 'PATCH' | 'DELETE', body?: object) {
@@ -80,12 +99,28 @@ export default function AdminReportList({
 
   function startEdit(r: AdminReport) {
     setEditingId(r.id)
-    setEditDraft({ category: r.category, status: r.status })
+    setEditDraft({
+      category:        r.category,
+      status:          r.status,
+      municipality_id: r.municipality_id ?? '',
+      description:     r.description ?? '',
+    })
   }
 
   async function saveEdit(id: string) {
-    await runAction(id, 'PATCH', { action: 'edit', ...editDraft })
+    await runAction(id, 'PATCH', {
+      action:          'edit',
+      category:        editDraft.category,
+      status:          editDraft.status,
+      municipality_id: editDraft.municipality_id || null,
+      description:     editDraft.description || null,
+    })
     setEditingId(null)
+  }
+
+  function set<K extends keyof EditDraft>(key: K) {
+    return (e: React.ChangeEvent<HTMLSelectElement | HTMLTextAreaElement>) =>
+      setEditDraft((d) => ({ ...d, [key]: e.target.value }))
   }
 
   if (reports.length === 0) {
@@ -123,9 +158,7 @@ export default function AdminReportList({
                     {r.image_url ? (
                       <img src={r.image_url} alt="" className="w-12 h-12 object-cover rounded-lg" />
                     ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-300 text-xl">
-                        📷
-                      </div>
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-300 text-xl">📷</div>
                     )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.public_token}</td>
@@ -157,6 +190,14 @@ export default function AdminReportList({
                         Προβολή
                       </a>
 
+                      {/* Edit button — available in all modes */}
+                      <button
+                        onClick={() => editingId === r.id ? setEditingId(null) : startEdit(r)}
+                        className="text-xs text-blue-600 font-semibold hover:underline"
+                      >
+                        {editingId === r.id ? 'Ακύρωση' : 'Επεξεργασία'}
+                      </button>
+
                       {mode === 'pending' && (
                         <>
                           <button
@@ -181,20 +222,12 @@ export default function AdminReportList({
                       )}
 
                       {mode === 'approved' && (
-                        <>
-                          <button
-                            onClick={() => runAction(r.id, 'PATCH', { action: 'deactivate' })}
-                            className="text-xs text-orange-500 font-semibold hover:underline"
-                          >
-                            Απενεργοποίηση
-                          </button>
-                          <button
-                            onClick={() => editingId === r.id ? setEditingId(null) : startEdit(r)}
-                            className="text-xs text-blue-600 font-semibold hover:underline"
-                          >
-                            {editingId === r.id ? 'Ακύρωση' : 'Επεξεργασία'}
-                          </button>
-                        </>
+                        <button
+                          onClick={() => runAction(r.id, 'PATCH', { action: 'deactivate' })}
+                          className="text-xs text-orange-500 font-semibold hover:underline"
+                        >
+                          Απενεργοποίηση
+                        </button>
                       )}
 
                       <button
@@ -211,38 +244,55 @@ export default function AdminReportList({
                   </td>
                 </tr>
 
-                {mode === 'approved' && editingId === r.id && (
+                {/* ── Inline edit row ── */}
+                {editingId === r.id && (
                   <tr key={`${r.id}-edit`} className="bg-blue-50 border-t border-blue-100">
                     <td colSpan={7} className="px-4 py-4">
-                      <div className="flex flex-wrap gap-4 items-end">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Κατηγορία
-                          </label>
-                          <select
-                            value={editDraft.category}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, category: e.target.value }))}
-                            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                          >
-                            {Object.entries(CATEGORIES).map(([val, label]) => (
-                              <option key={val} value={val}>{label}</option>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Κατηγορία</label>
+                          <select value={editDraft.category} onChange={set('category')} className={SELECT_CLS}>
+                            {Object.entries(CATEGORIES).map(([v, l]) => (
+                              <option key={v} value={v}>{l}</option>
                             ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Κατάσταση
-                          </label>
-                          <select
-                            value={editDraft.status}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, status: e.target.value }))}
-                            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                          >
-                            {Object.entries(STATUSES).map(([val, label]) => (
-                              <option key={val} value={val}>{label}</option>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Κατάσταση</label>
+                          <select value={editDraft.status} onChange={set('status')} className={SELECT_CLS}>
+                            {Object.entries(STATUSES).map(([v, l]) => (
+                              <option key={v} value={v}>{l}</option>
                             ))}
                           </select>
                         </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Δήμος</label>
+                          <select value={editDraft.municipality_id} onChange={set('municipality_id')} className={`${SELECT_CLS} w-full`}>
+                            <option value="">— Άγνωστος —</option>
+                            {municipalities
+                              .slice()
+                              .sort((a, b) => a.name_el.localeCompare(b.name_el, 'el'))
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>{m.name_el}</option>
+                              ))}
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Σχόλιο χρήστη
+                          </label>
+                          <textarea
+                            value={editDraft.description}
+                            onChange={set('description')}
+                            rows={3}
+                            maxLength={500}
+                            className={`${SELECT_CLS} w-full resize-none`}
+                            placeholder="Κενό = χωρίς σχόλιο"
+                          />
+                          <p className="text-right text-xs text-gray-400 mt-0.5">{editDraft.description.length}/500</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
                         <button
                           onClick={() => saveEdit(r.id)}
                           disabled={loadingId === r.id}

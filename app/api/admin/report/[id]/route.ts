@@ -13,10 +13,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     action?: string
     category?: string
     status?: string
+    municipality_id?: string | null
+    description?: string | null
   }
 
   const VALID_CATEGORIES = ['illegal_dump', 'roadside_litter', 'abandoned_vehicle', 'vandalism', 'other']
   const VALID_STATUSES = ['pending', 'in_review', 'forwarded', 'resolved', 'rejected']
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
   let update: Record<string, unknown>
   if (body.action === 'approve') {
@@ -31,6 +34,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     update = {}
     if (body.category && VALID_CATEGORIES.includes(body.category)) update.category = body.category
     if (body.status && VALID_STATUSES.includes(body.status)) update.status = body.status
+    if ('municipality_id' in body) {
+      update.municipality_id = body.municipality_id && UUID_RE.test(body.municipality_id)
+        ? body.municipality_id
+        : null
+    }
+    if ('description' in body) {
+      update.description = body.description?.trim() || null
+    }
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }

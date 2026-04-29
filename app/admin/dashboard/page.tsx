@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
-import AdminReportList, { type AdminReport } from '@/components/AdminReportList'
+import AdminReportList, { type AdminReport, type Municipality } from '@/components/AdminReportList'
 
 export const metadata: Metadata = {
   title: 'Admin Dashboard – GreeceClean',
@@ -9,11 +9,13 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 
+const REPORT_SELECT = 'id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality_id, municipality:municipality_id(name_el)'
+
 async function getPendingReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []
   const { data } = await supabaseAdmin
     .from('reports')
-    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality:municipality_id(name_el)')
+    .select(REPORT_SELECT)
     .eq('is_approved', false)
     .neq('status', 'rejected')
     .order('created_at', { ascending: false })
@@ -24,7 +26,7 @@ async function getApprovedReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []
   const { data } = await supabaseAdmin
     .from('reports')
-    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality:municipality_id(name_el)')
+    .select(REPORT_SELECT)
     .eq('is_approved', true)
     .order('created_at', { ascending: false })
     .limit(100)
@@ -35,18 +37,28 @@ async function getRejectedReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []
   const { data } = await supabaseAdmin
     .from('reports')
-    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality:municipality_id(name_el)')
+    .select(REPORT_SELECT)
     .eq('status', 'rejected')
     .order('created_at', { ascending: false })
     .limit(50)
   return (data ?? []) as unknown as AdminReport[]
 }
 
+async function getMunicipalities(): Promise<Municipality[]> {
+  if (!isSupabaseConfigured) return []
+  const { data } = await supabaseAdmin
+    .from('municipalities')
+    .select('id, name_el')
+    .order('name_el')
+  return (data ?? []) as Municipality[]
+}
+
 export default async function AdminDashboard() {
-  const [pending, approved, rejected] = await Promise.all([
+  const [pending, approved, rejected, municipalities] = await Promise.all([
     getPendingReports(),
     getApprovedReports(),
     getRejectedReports(),
+    getMunicipalities(),
   ])
 
   return (
@@ -74,7 +86,7 @@ export default async function AdminDashboard() {
               {pending.length}
             </span>
           </div>
-          <AdminReportList reports={pending} mode="pending" />
+          <AdminReportList reports={pending} municipalities={municipalities} mode="pending" />
         </section>
 
         <section className="mb-10">
@@ -84,7 +96,7 @@ export default async function AdminDashboard() {
               {approved.length}
             </span>
           </div>
-          <AdminReportList reports={approved} mode="approved" />
+          <AdminReportList reports={approved} municipalities={municipalities} mode="approved" />
         </section>
 
         {rejected.length > 0 && (
@@ -95,7 +107,7 @@ export default async function AdminDashboard() {
                 {rejected.length}
               </span>
             </div>
-            <AdminReportList reports={rejected} mode="rejected" />
+            <AdminReportList reports={rejected} municipalities={municipalities} mode="rejected" />
           </section>
         )}
       </div>

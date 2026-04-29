@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: 'Δες όλες τις εγκεκριμένες αναφορές σε διαδραστικό χάρτη.',
 }
 
+export const dynamic = 'force-dynamic'
+
 async function getReports(): Promise<SeedReport[]> {
   if (!isSupabaseConfigured) return SEED_REPORTS
 

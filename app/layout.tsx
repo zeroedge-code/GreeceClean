@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Header from '@/components/Header'
+import { LocaleProvider } from '@/components/LocaleProvider'
+import { getLocale } from '@/lib/i18n'
 
 const inter = Inter({ subsets: ['latin', 'greek'] })
 
@@ -18,16 +20,20 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const locale = await getLocale()
+
   return (
-    <html lang="el">
+    <html lang={locale}>
       <body className={inter.className}>
-        <Header />
-        <main>{children}</main>
+        <LocaleProvider locale={locale}>
+          <Header />
+          <main>{children}</main>
+        </LocaleProvider>
       </body>
     </html>
   )

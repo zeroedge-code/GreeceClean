@@ -2,25 +2,28 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-
-const nav = [
-  { href: '/', label: 'Αρχική' },
-  { href: '/map', label: 'Χάρτης' },
-]
+import { useLocale } from './LocaleProvider'
+import LanguageSwitcher from './LanguageSwitcher'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { t } = useLocale()
+
+  const nav = [
+    { href: '/', label: t.nav.home },
+    { href: '/map', label: t.nav.map },
+  ]
 
   return (
     <header className="bg-primary text-white shadow-md">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+        <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight shrink-0">
           <span className="text-2xl">🌿</span>
           <span>GreeceClean</span>
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium flex-1 justify-end">
           {nav.map(({ href, label }) => (
             <Link
               key={href}
@@ -31,23 +34,27 @@ export default function Header() {
             </Link>
           ))}
           <Link
-            href="/"
+            href="/report"
             className="bg-action text-white px-4 py-2 rounded-2xl hover:bg-action-600 transition-colors duration-150"
           >
-            Αναφορά
+            {t.nav.report}
           </Link>
+          <LanguageSwitcher />
         </nav>
 
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden p-2 rounded-xl hover:bg-primary-600 transition-colors"
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Μενού"
-        >
-          <span className="block w-5 h-0.5 bg-white mb-1" />
-          <span className="block w-5 h-0.5 bg-white mb-1" />
-          <span className="block w-5 h-0.5 bg-white" />
-        </button>
+        {/* Mobile right-side: flags + hamburger */}
+        <div className="md:hidden flex items-center gap-2">
+          <LanguageSwitcher />
+          <button
+            className="p-2 rounded-xl hover:bg-primary-600 transition-colors"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label="Menu"
+          >
+            <span className="block w-5 h-0.5 bg-white mb-1" />
+            <span className="block w-5 h-0.5 bg-white mb-1" />
+            <span className="block w-5 h-0.5 bg-white" />
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
@@ -64,11 +71,11 @@ export default function Header() {
             </Link>
           ))}
           <Link
-            href="/"
+            href="/report"
             className="bg-action text-white px-4 py-2 rounded-2xl text-center hover:bg-action-600 transition-colors"
             onClick={() => setMenuOpen(false)}
           >
-            Αναφορά
+            {t.nav.report}
           </Link>
         </div>
       )}

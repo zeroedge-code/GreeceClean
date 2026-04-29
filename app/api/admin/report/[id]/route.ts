@@ -9,7 +9,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params
-  const body = (await req.json()) as { action?: string }
+  const body = (await req.json()) as {
+    action?: string
+    category?: string
+    status?: string
+  }
+
+  const VALID_CATEGORIES = ['illegal_dump', 'roadside_litter', 'abandoned_vehicle', 'vandalism', 'other']
+  const VALID_STATUSES = ['pending', 'in_review', 'forwarded', 'resolved', 'rejected']
 
   let update: Record<string, unknown>
   if (body.action === 'approve') {
@@ -18,6 +25,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     update = { status: 'resolved' }
   } else if (body.action === 'reject') {
     update = { is_approved: false, status: 'rejected' }
+  } else if (body.action === 'deactivate') {
+    update = { is_approved: false, status: 'pending' }
+  } else if (body.action === 'edit') {
+    update = {}
+    if (body.category && VALID_CATEGORIES.includes(body.category)) update.category = body.category
+    if (body.status && VALID_STATUSES.includes(body.status)) update.status = body.status
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+    }
   } else {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }

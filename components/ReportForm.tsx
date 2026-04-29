@@ -124,7 +124,13 @@ export default function ReportForm({ translations: t }: { translations: FormTran
       const exifr  = await import('exifr')
       const result = await exifr.gps(file)
       if (result?.latitude != null && result?.longitude != null) {
-        setExifCoords({ lat: result.latitude, lng: result.longitude })
+        const { latitude: lat, longitude: lng } = result
+        // Only use EXIF coords if they fall inside Greece — otherwise the server
+        // will reject the submission with "Coordinates outside Greece"
+        const inGreece = lat >= 34.8 && lat <= 41.8 && lng >= 19.3 && lng <= 29.7
+        if (inGreece) {
+          setExifCoords({ lat, lng })
+        }
       }
     } catch {
       // EXIF read failure is non-fatal

@@ -135,10 +135,6 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           <h2 className="text-2xl font-bold text-primary mb-1">{t.photoTitle}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.photoDesc}</p>
 
-          {/* Two inputs linked via htmlFor — native label activation works on all iOS browsers */}
-          <input id="gc-input-camera"  type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleFile} />
-          <input id="gc-input-library" type="file" accept="image/*"                       className="sr-only" onChange={handleFile} />
-
           {preview ? (
             <div className="relative mb-4">
               <img src={preview} alt={t.photoTitle} className="w-full rounded-2xl object-cover max-h-72" />
@@ -151,19 +147,35 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 mb-3">
-                <label
-                  htmlFor="gc-input-camera"
-                  className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors cursor-pointer select-none"
-                >
-                  <span className="text-4xl leading-none">📷</span>
-                  <span className="text-sm font-semibold">{t.photoButton}</span>
+                {/* Each input sits inside its own label and fills it with opacity:0.
+                    This keeps the two inputs at different screen positions so iOS
+                    cannot confuse one for the other (sr-only stacks both at the
+                    same off-screen pixel, causing the camera to win every time). */}
+                <label className="relative h-36 border-2 border-dashed border-primary-300 rounded-2xl cursor-pointer select-none overflow-hidden text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors">
+                  <div className="pointer-events-none flex flex-col items-center justify-center gap-2 h-full">
+                    <span className="text-4xl leading-none">📷</span>
+                    <span className="text-sm font-semibold">{t.photoButton}</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFile}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
                 </label>
-                <label
-                  htmlFor="gc-input-library"
-                  className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer select-none"
-                >
-                  <span className="text-4xl leading-none">🖼️</span>
-                  <span className="text-sm font-semibold">{t.photoLibrary}</span>
+
+                <label className="relative h-36 border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer select-none overflow-hidden text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors">
+                  <div className="pointer-events-none flex flex-col items-center justify-center gap-2 h-full">
+                    <span className="text-4xl leading-none">🖼️</span>
+                    <span className="text-sm font-semibold">{t.photoLibrary}</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFile}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
                 </label>
               </div>
               <p className="text-xs text-center text-gray-400 mb-4">{t.photoHint}</p>

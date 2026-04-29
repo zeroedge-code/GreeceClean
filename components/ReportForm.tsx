@@ -52,6 +52,7 @@ export default function ReportForm() {
   const [gpsLoading, setGpsLoading] = useState(false)
   const [gpsError, setGpsError]     = useState<string | null>(null)
   const [category, setCategory]     = useState<CategoryId | null>(null)
+  const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [trackingUrl, setTrackingUrl] = useState('')
@@ -102,6 +103,7 @@ export default function ReportForm() {
     fd.append('lng', String(coords.lng))
     fd.append('category', category)
     fd.append('hp_field', honeyValue)
+    if (description.trim()) fd.append('description', description.trim())
 
     try {
       const res = await fetch('/api/report', { method: 'POST', body: fd })
@@ -263,6 +265,22 @@ export default function ReportForm() {
                 <span className="text-sm font-medium text-gray-800 leading-snug">{cat.label}</span>
               </button>
             ))}
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Περιγραφή <span className="text-gray-400 font-normal">(προαιρετικό)</span>
+            </label>
+            <textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="Περίγραψε το πρόβλημα με λίγα λόγια…"
+              className="w-full border border-gray-300 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            <p className="text-right text-xs text-gray-400 mt-1">{description.length}/500</p>
           </div>
 
           {/*

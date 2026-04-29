@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
   const lat = parseFloat(formData.get('lat')?.toString() ?? '')
   const lng = parseFloat(formData.get('lng')?.toString() ?? '')
   const category = formData.get('category')?.toString() ?? ''
+  const description = formData.get('description')?.toString().slice(0, 500) || null
 
   if (!imageFile || isNaN(lat) || isNaN(lng) || !category) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -151,6 +152,7 @@ export async function POST(req: NextRequest) {
     status: 'pending',
     is_approved: false,
     municipality_id: municipalityId,
+    description,
   })
 
   if (dbErr) {

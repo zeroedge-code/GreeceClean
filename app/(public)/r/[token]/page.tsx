@@ -30,6 +30,7 @@ type Report = {
   lng: number
   category: string
   created_at: string
+  description?: string | null
   municipality: { name_el: string } | null
 }
 
@@ -37,7 +38,7 @@ async function getReport(token: string): Promise<Report | null> {
   if (isSupabaseConfigured) {
     const { data } = await supabaseAdmin
       .from('reports')
-      .select('public_token, status, image_url, lat, lng, category, created_at, municipality:municipality_id(name_el)')
+      .select('public_token, status, image_url, lat, lng, category, created_at, description, municipality:municipality_id(name_el)')
       .eq('public_token', token)
       .single()
     if (data) return data as unknown as Report
@@ -110,6 +111,12 @@ export default async function TrackingPage({
               <dt className="font-medium shrink-0">Υποβλήθηκε:</dt>
               <dd>{new Date(report.created_at).toLocaleDateString('el-GR')}</dd>
             </div>
+            {report.description && (
+              <div className="pt-2 border-t border-gray-100 mt-2">
+                <dt className="font-medium text-gray-700 mb-1">Περιγραφή:</dt>
+                <dd className="text-gray-600 leading-relaxed">{report.description}</dd>
+              </div>
+            )}
           </dl>
         </div>
 

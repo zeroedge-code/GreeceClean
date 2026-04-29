@@ -13,6 +13,7 @@ export type AdminReport = {
   status: string
   is_approved: boolean
   created_at: string
+  description: string | null
   municipality: { name_el: string } | null
 }
 
@@ -129,7 +130,14 @@ export default function AdminReportList({
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.public_token}</td>
                   <td className="px-4 py-3 text-gray-800">{r.municipality?.name_el ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{CATEGORIES[r.category] ?? r.category}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    <div>{CATEGORIES[r.category] ?? r.category}</div>
+                    {r.description && (
+                      <div className="text-xs text-gray-400 mt-0.5 max-w-[180px] truncate" title={r.description}>
+                        {r.description}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
                       {STATUSES[r.status] ?? r.status}

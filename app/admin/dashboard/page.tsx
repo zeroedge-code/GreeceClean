@@ -13,7 +13,7 @@ async function getPendingReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []
   const { data } = await supabaseAdmin
     .from('reports')
-    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, municipality:municipality_id(name_el)')
+    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality:municipality_id(name_el)')
     .eq('is_approved', false)
     .neq('status', 'rejected')
     .order('created_at', { ascending: false })
@@ -24,7 +24,7 @@ async function getApprovedReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []
   const { data } = await supabaseAdmin
     .from('reports')
-    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, municipality:municipality_id(name_el)')
+    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality:municipality_id(name_el)')
     .eq('is_approved', true)
     .order('created_at', { ascending: false })
     .limit(100)
@@ -35,7 +35,7 @@ async function getRejectedReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []
   const { data } = await supabaseAdmin
     .from('reports')
-    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, municipality:municipality_id(name_el)')
+    .select('id, public_token, image_url, lat, lng, category, status, is_approved, created_at, description, municipality:municipality_id(name_el)')
     .eq('status', 'rejected')
     .order('created_at', { ascending: false })
     .limit(50)

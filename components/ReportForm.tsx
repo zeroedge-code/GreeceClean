@@ -57,8 +57,19 @@ export default function ReportForm({ translations: t }: { translations: FormTran
   const [copied,        setCopied]        = useState(false)
   const [honeyValue,    setHoneyValue]    = useState('')
 
-  const cameraRef  = useRef<HTMLInputElement>(null)
-  const libraryRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function openCamera() {
+    if (!fileRef.current) return
+    fileRef.current.setAttribute('capture', 'environment')
+    fileRef.current.click()
+  }
+
+  function openLibrary() {
+    if (!fileRef.current) return
+    fileRef.current.removeAttribute('capture')
+    fileRef.current.click()
+  }
 
   // ── Photo selection + EXIF GPS extraction ──────────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,9 +148,7 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           <h2 className="text-2xl font-bold text-primary mb-1">{t.photoTitle}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.photoDesc}</p>
 
-          {/* Two hidden inputs: camera (capture) and library (no capture) */}
-          <input ref={cameraRef}  type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleFile} />
-          <input ref={libraryRef} type="file" accept="image/*"                       className="sr-only" onChange={handleFile} />
+          <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={handleFile} />
 
           {preview ? (
             <div className="relative mb-4">
@@ -153,14 +162,14 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           ) : (
             <div className="grid grid-cols-2 gap-3 mb-4">
               <button
-                onClick={() => cameraRef.current?.click()}
+                onClick={openCamera}
                 className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors"
               >
                 <span className="text-4xl leading-none">📷</span>
                 <span className="text-sm font-semibold">{t.photoButton}</span>
               </button>
               <button
-                onClick={() => libraryRef.current?.click()}
+                onClick={openLibrary}
                 className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
               >
                 <span className="text-4xl leading-none">🖼️</span>

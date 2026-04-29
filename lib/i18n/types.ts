@@ -62,6 +62,10 @@ export type Dictionary = {
     locationLoading: string
     locationButton: string
     locationError: string
+    locationExifScanning: string
+    locationExifNotFound: string
+    locationConfirmTitle: string
+    locationSearchPlaceholder: string
     categoryTitle: string
     categoryDesc: string
     descLabel: string

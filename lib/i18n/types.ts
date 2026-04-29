@@ -53,6 +53,7 @@ export type Dictionary = {
     photoTitle: string
     photoDesc: string
     photoButton: string
+    photoLibrary: string
     photoHint: string
     photoRemove: string
     locationTitle: string

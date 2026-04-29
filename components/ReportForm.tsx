@@ -57,7 +57,8 @@ export default function ReportForm({ translations: t }: { translations: FormTran
   const [copied,        setCopied]        = useState(false)
   const [honeyValue,    setHoneyValue]    = useState('')
 
-  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef  = useRef<HTMLInputElement>(null)
+  const libraryRef = useRef<HTMLInputElement>(null)
 
   // ── Photo selection + EXIF GPS extraction ──────────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,14 +137,9 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           <h2 className="text-2xl font-bold text-primary mb-1">{t.photoTitle}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.photoDesc}</p>
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={handleFile}
-          />
+          {/* Two hidden inputs: camera (capture) and library (no capture) */}
+          <input ref={cameraRef}  type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleFile} />
+          <input ref={libraryRef} type="file" accept="image/*"                       className="sr-only" onChange={handleFile} />
 
           {preview ? (
             <div className="relative mb-4">
@@ -155,15 +151,24 @@ export default function ReportForm({ translations: t }: { translations: FormTran
               >✕</button>
             </div>
           ) : (
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-full h-48 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-3 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors mb-4"
-            >
-              <span className="text-5xl leading-none">📷</span>
-              <span className="font-semibold">{t.photoButton}</span>
-              <span className="text-xs text-gray-400">{t.photoHint}</span>
-            </button>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <button
+                onClick={() => cameraRef.current?.click()}
+                className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors"
+              >
+                <span className="text-4xl leading-none">📷</span>
+                <span className="text-sm font-semibold">{t.photoButton}</span>
+              </button>
+              <button
+                onClick={() => libraryRef.current?.click()}
+                className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+              >
+                <span className="text-4xl leading-none">🖼️</span>
+                <span className="text-sm font-semibold">{t.photoLibrary}</span>
+              </button>
+            </div>
           )}
+          {!preview && <p className="text-xs text-center text-gray-400 mb-4">{t.photoHint}</p>}
 
           {/* EXIF status */}
           {exifScanning && (

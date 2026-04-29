@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import type { Dictionary } from '@/lib/i18n/types'
 
@@ -8,7 +8,6 @@ type FormTranslations = Dictionary['form']
 type Step = 'photo' | 'location' | 'category' | 'success'
 const STEPS: Step[] = ['photo', 'location', 'category']
 
-// LocationPicker uses Leaflet which requires the DOM — no SSR
 const LocationPickerDynamic = dynamic(() => import('./LocationPicker'), {
   ssr: false,
   loading: () => (
@@ -57,16 +56,68 @@ export default function ReportForm({ translations: t }: { translations: FormTran
   const [copied,        setCopied]        = useState(false)
   const [honeyValue,    setHoneyValue]    = useState('')
 
+  // ── Camera capture (getUserMedia — no file input, no capture attribute) ───
+  const [cameraStream,   setCameraStream]   = useState<MediaStream | null>(null)
+  const [showCameraView, setShowCameraView] = useState(false)
+  const videoRef  = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // ── Photo selection + EXIF GPS extraction ──────────────────────────────────
+  // Attach stream to video element once both are mounted
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !cameraStream) return
+    video.srcObject = cameraStream
+  }, [cameraStream, showCameraView])
+
+  async function openCameraView() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // Browser doesn't support getUserMedia — do nothing (button is hidden in that case)
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      setShowCameraView(true)
+      setCameraStream(stream)
+    } catch {
+      // Permission denied or no camera — silently ignore
+    }
+  }
+
+  function stopCamera() {
+    cameraStream?.getTracks().forEach((track) => track.stop())
+    setCameraStream(null)
+    setShowCameraView(false)
+  }
+
+  function captureFrame() {
+    const video  = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width  = video.videoWidth  || 1280
+    canvas.height = video.videoHeight || 720
+    canvas.getContext('2d')?.drawImage(video, 0, 0)
+    stopCamera()
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      setPhoto(file)
+      setPreview(URL.createObjectURL(file))
+      setExifCoords(null) // camera captures have no EXIF
+      setCoords(null)
+    }, 'image/jpeg', 0.92)
+  }
+
+  // ── Library file selection + EXIF extraction ──────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    // Reset the input value so the same file can be re-selected
+    e.target.value = ''
 
     setPhoto(file)
     setPreview(URL.createObjectURL(file))
     setExifCoords(null)
-    setCoords(null) // reset confirmed coords when photo changes
+    setCoords(null)
 
     setExifScanning(true)
     try {
@@ -119,11 +170,12 @@ export default function ReportForm({ translations: t }: { translations: FormTran
     })
   }
 
-  // ── Location confirmed from map picker ────────────────────────────────────
   function handleLocationConfirm(c: { lat: number; lng: number }) {
     setCoords(c)
     setStep('category')
   }
+
+  const supportsCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
@@ -135,7 +187,34 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           <h2 className="text-2xl font-bold text-primary mb-1">{t.photoTitle}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.photoDesc}</p>
 
-          {preview ? (
+          {/* ── Live camera viewfinder (getUserMedia) ── */}
+          {showCameraView && (
+            <div className="relative mb-4 rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <canvas ref={canvasRef} className="hidden" />
+              {/* Shutter controls */}
+              <div className="absolute bottom-5 inset-x-0 flex items-center justify-between px-8">
+                <button
+                  onClick={stopCamera}
+                  className="text-white text-sm font-medium bg-black/40 backdrop-blur rounded-full px-4 py-2"
+                >
+                  {t.navBack}
+                </button>
+                {/* Classic shutter button */}
+                <button
+                  onClick={captureFrame}
+                  className="w-16 h-16 rounded-full bg-white shadow-xl flex items-center justify-center"
+                  aria-label="Capture"
+                >
+                  <span className="w-12 h-12 rounded-full bg-white border-2 border-gray-300 block" />
+                </button>
+                <div className="w-16" />
+              </div>
+            </div>
+          )}
+
+          {/* ── Photo preview ── */}
+          {!showCameraView && preview && (
             <div className="relative mb-4">
               <img src={preview} alt={t.photoTitle} className="w-full rounded-2xl object-cover max-h-72" />
               <button
@@ -144,37 +223,32 @@ export default function ReportForm({ translations: t }: { translations: FormTran
                 aria-label={t.photoRemove}
               >✕</button>
             </div>
-          ) : (
+          )}
+
+          {/* ── Camera / Library picker (shown when no photo yet) ── */}
+          {!showCameraView && !preview && (
             <>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                {/* Each input sits inside its own label and fills it with opacity:0.
-                    This keeps the two inputs at different screen positions so iOS
-                    cannot confuse one for the other (sr-only stacks both at the
-                    same off-screen pixel, causing the camera to win every time). */}
-                <label className="relative h-36 border-2 border-dashed border-primary-300 rounded-2xl cursor-pointer select-none overflow-hidden text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors">
-                  <div className="pointer-events-none flex flex-col items-center justify-center gap-2 h-full">
+              <div className={`grid gap-3 mb-3 ${supportsCamera ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {/* Camera: getUserMedia — no file input, no capture attribute */}
+                {supportsCamera && (
+                  <button
+                    onClick={openCameraView}
+                    className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors"
+                  >
                     <span className="text-4xl leading-none">📷</span>
                     <span className="text-sm font-semibold">{t.photoButton}</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFile}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                </label>
+                  </button>
+                )}
 
-                <label className="relative h-36 border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer select-none overflow-hidden text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors">
-                  <div className="pointer-events-none flex flex-col items-center justify-center gap-2 h-full">
-                    <span className="text-4xl leading-none">🖼️</span>
-                    <span className="text-sm font-semibold">{t.photoLibrary}</span>
-                  </div>
+                {/* Library: plain file input, NO capture attribute */}
+                <label className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer select-none">
+                  <span className="text-4xl leading-none">🖼️</span>
+                  <span className="text-sm font-semibold">{t.photoLibrary}</span>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleFile}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    className="sr-only"
                   />
                 </label>
               </div>
@@ -195,13 +269,15 @@ export default function ReportForm({ translations: t }: { translations: FormTran
             </p>
           )}
 
-          <button
-            disabled={!photo || exifScanning}
-            onClick={() => setStep('location')}
-            className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {t.navNext}
-          </button>
+          {!showCameraView && (
+            <button
+              disabled={!photo || exifScanning}
+              onClick={() => setStep('location')}
+              className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t.navNext}
+            </button>
+          )}
         </div>
       )}
 

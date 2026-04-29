@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'Admin Dashboard – GreeceClean',
 }
 
+export const dynamic = 'force-dynamic'
+
 
 async function getPendingReports(): Promise<AdminReport[]> {
   if (!isSupabaseConfigured) return []

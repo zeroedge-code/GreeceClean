@@ -6,7 +6,6 @@ import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 const MAX_BYTES = 500 * 1024 // 500 KB
 const STORAGE_BUCKET = 'reports'
 
-// Progressively harder compression until under MAX_BYTES
 async function compressImage(raw: Buffer): Promise<Buffer> {
   const attempts = [
     { width: 1920, quality: 80 },
@@ -32,12 +31,42 @@ function originOf(req: NextRequest): string {
   return req.nextUrl.origin
 }
 
+// Look up municipality by name; auto-create if not found.
+// Tries exact match first, then partial (e.g. "Αθήνα" inside "Δήμος Αθηναίων"),
+// then falls back to inserting a new row so every region is captured automatically.
+async function resolveMunicipalityId(name: string): Promise<string | null> {
+  if (!name || name === 'Άγνωστος Δήμος') return null
+
+  // 1 — exact case-insensitive match
+  const { data: exact } = await supabaseAdmin
+    .from('municipalities')
+    .select('id')
+    .ilike('name_el', name)
+    .maybeSingle()
+  if (exact) return exact.id
+
+  // 2 — DB row contains the Nominatim name (handles "Δήμος Αθηναίων" ⊃ "Αθήνα")
+  const { data: partial } = await supabaseAdmin
+    .from('municipalities')
+    .select('id')
+    .ilike('name_el', `%${name}%`)
+    .limit(1)
+    .maybeSingle()
+  if (partial) return partial.id
+
+  // 3 — unseen municipality: create it so the admin sees the real location
+  const { data: created } = await supabaseAdmin
+    .from('municipalities')
+    .insert({ name_el: name, name_en: '' })
+    .select('id')
+    .single()
+  return created?.id ?? null
+}
+
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
 
   // ── Honeypot ───────────────────────────────────────────────────────────────
-  // Bots fill every visible field. This field is never shown to real users.
-  // A non-empty value means a bot submitted the form — silently accept & discard.
   const honeypot = formData.get('hp_field')?.toString() ?? ''
   if (honeypot.trim() !== '') {
     const fakeToken = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
@@ -61,7 +90,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Image too large (max 10 MB)' }, { status: 413 })
   }
 
-  // Bounding box for Greece (mainland + islands)
   if (lat < 34.8 || lat > 41.8 || lng < 19.3 || lng > 29.7) {
     return NextResponse.json({ error: 'Coordinates outside Greece' }, { status: 422 })
   }
@@ -83,7 +111,7 @@ export async function POST(req: NextRequest) {
   const publicToken = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   const { municipalityName } = await reverseGeocode(lat, lng)
 
-  // ── Stub mode (Supabase not yet configured) ────────────────────────────────
+  // ── Stub mode ──────────────────────────────────────────────────────────────
   if (!isSupabaseConfigured) {
     console.info(`[stub] report ${publicToken} | ${municipalityName} | ${category} | ${compressed.length} bytes`)
     return NextResponse.json({
@@ -93,16 +121,19 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // ── Upload image ───────────────────────────────────────────────────────────
-  const { error: uploadErr } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .upload(`${publicToken}.webp`, compressed, {
-      contentType: 'image/webp',
-      upsert: false,
-    })
+  // ── Upload image + resolve municipality in parallel ────────────────────────
+  const [uploadResult, municipalityId] = await Promise.all([
+    supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .upload(`${publicToken}.webp`, compressed, {
+        contentType: 'image/webp',
+        upsert: false,
+      }),
+    resolveMunicipalityId(municipalityName),
+  ])
 
-  if (uploadErr) {
-    console.error('Storage upload error:', uploadErr)
+  if (uploadResult.error) {
+    console.error('Storage upload error:', uploadResult.error)
     return NextResponse.json({ error: 'Storage error' }, { status: 500 })
   }
 
@@ -119,7 +150,7 @@ export async function POST(req: NextRequest) {
     category,
     status: 'pending',
     is_approved: false,
-    // municipality_id resolved in a background job that matches municipalityName to the table
+    municipality_id: municipalityId,
   })
 
   if (dbErr) {

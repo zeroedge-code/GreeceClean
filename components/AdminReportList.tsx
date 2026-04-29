@@ -130,6 +130,14 @@ export default function AdminReportList({ reports }: { reports: AdminReport[] })
                     >
                       Καθαρίστηκε
                     </button>
+                    {r.status !== 'rejected' && (
+                      <button
+                        onClick={() => runAction(r.id, 'PATCH', { action: 'reject' })}
+                        className="text-xs text-orange-500 font-semibold hover:underline"
+                      >
+                        Απόρριψη
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         if (confirm(`Διαγραφή αναφοράς ${r.public_token};`)) {

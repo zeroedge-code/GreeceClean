@@ -3,8 +3,17 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import type { SeedReport } from '@/lib/seed-data'
 
 const GREECE_CENTER: [number, number] = [39.0742, 21.8243]
+
+const STATUS_LABELS: Record<string, string> = {
+  pending:   'Σε αναμονή',
+  in_review: 'Υπό εξέταση',
+  forwarded: 'Προωθήθηκε',
+  resolved:  'Επιλύθηκε',
+  rejected:  'Απορρίφθηκε',
+}
 
 const markerIcon = L.icon({
   iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -15,23 +24,13 @@ const markerIcon = L.icon({
   popupAnchor: [1, -34],
 })
 
-type Report = {
-  id: string
-  public_token: string
-  lat: number
-  lng: number
-  status: string
-  municipality: string
-}
-
-export default function MapClient() {
+export default function MapClient({ reports }: { reports: SeedReport[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<L.Map | null>(null)
+  const mapRef       = useRef<L.Map | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Destroy any stale instance left by Strict Mode double-mount or HMR
     if (mapRef.current) {
       mapRef.current.remove()
       mapRef.current = null
@@ -43,27 +42,29 @@ export default function MapClient() {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map)
 
-    mapRef.current = map
-
-    // TODO: fetch approved reports from Supabase and add markers
-    const reports: Report[] = []
     reports.forEach((r) => {
+      const municipalityName = r.municipality?.name_el ?? 'Άγνωστος Δήμος'
+      const statusLabel = STATUS_LABELS[r.status] ?? r.status
       L.marker([r.lat, r.lng], { icon: markerIcon })
         .addTo(map)
         .bindPopup(`
-          <div style="font-size:13px;min-width:140px">
-            <p style="font-weight:600;margin:0 0 2px">${r.municipality}</p>
-            <p style="color:#6b7280;margin:0 0 6px">${r.status}</p>
-            <a href="/r/${r.public_token}" style="color:#005BAE">Προβολή αναφοράς →</a>
+          <div style="font-size:13px;min-width:160px;line-height:1.5">
+            <p style="font-weight:600;margin:0 0 2px">${municipalityName}</p>
+            <p style="color:#6b7280;margin:0 0 6px;font-size:12px">${statusLabel}</p>
+            <a href="/r/${r.public_token}" style="color:#005BAE;font-size:12px">
+              Προβολή αναφοράς →
+            </a>
           </div>
         `)
     })
+
+    mapRef.current = map
 
     return () => {
       map.remove()
       mapRef.current = null
     }
-  }, [])
+  }, [reports])
 
   return <div ref={containerRef} className="h-full w-full" />
 }

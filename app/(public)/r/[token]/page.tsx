@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { SEED_REPORTS } from '@/lib/seed-data'
 
 export const metadata: Metadata = {
   title: 'Παρακολούθηση Αναφοράς – GreeceClean',
@@ -33,13 +34,16 @@ type Report = {
 }
 
 async function getReport(token: string): Promise<Report | null> {
-  if (!isSupabaseConfigured) return null
-  const { data } = await supabaseAdmin
-    .from('reports')
-    .select('public_token, status, image_url, lat, lng, category, created_at, municipality:municipality_id(name_el)')
-    .eq('public_token', token)
-    .single()
-  return (data as Report | null)
+  if (isSupabaseConfigured) {
+    const { data } = await supabaseAdmin
+      .from('reports')
+      .select('public_token, status, image_url, lat, lng, category, created_at, municipality:municipality_id(name_el)')
+      .eq('public_token', token)
+      .single()
+    if (data) return data as unknown as Report
+  }
+  // Fall back to seed data (used when Supabase is not yet configured)
+  return SEED_REPORTS.find((r) => r.public_token === token) ?? null
 }
 
 export default async function TrackingPage({

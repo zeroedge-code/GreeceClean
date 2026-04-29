@@ -16,6 +16,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     update = { is_approved: true, status: 'in_review' }
   } else if (body.action === 'mark_cleaned') {
     update = { status: 'resolved' }
+  } else if (body.action === 'reject') {
+    update = { is_approved: false, status: 'rejected' }
   } else {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }

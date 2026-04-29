@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import type { SeedReport } from '@/lib/seed-data'
 
 const MapClient = dynamic(() => import('@/components/MapClient'), {
   ssr: false,
@@ -11,6 +12,6 @@ const MapClient = dynamic(() => import('@/components/MapClient'), {
   ),
 })
 
-export default function MapWrapper() {
-  return <MapClient />
+export default function MapWrapper({ reports }: { reports: SeedReport[] }) {
+  return <MapClient reports={reports} />
 }

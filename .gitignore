@@ -27,7 +27,10 @@ Thumbs.db
 .idea/
 .claude/
 tsconfig.tsbuildinfo
+*.code-workspace
 
 # Supabase local
 supabase/.branches
 supabase/.temp
+
+.vercel

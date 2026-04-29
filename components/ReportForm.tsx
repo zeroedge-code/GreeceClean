@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import type { Dictionary } from '@/lib/i18n/types'
 
@@ -57,19 +57,6 @@ export default function ReportForm({ translations: t }: { translations: FormTran
   const [copied,        setCopied]        = useState(false)
   const [honeyValue,    setHoneyValue]    = useState('')
 
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  function openCamera() {
-    if (!fileRef.current) return
-    fileRef.current.setAttribute('capture', 'environment')
-    fileRef.current.click()
-  }
-
-  function openLibrary() {
-    if (!fileRef.current) return
-    fileRef.current.removeAttribute('capture')
-    fileRef.current.click()
-  }
 
   // ── Photo selection + EXIF GPS extraction ──────────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,7 +135,9 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           <h2 className="text-2xl font-bold text-primary mb-1">{t.photoTitle}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.photoDesc}</p>
 
-          <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={handleFile} />
+          {/* Two inputs linked via htmlFor — native label activation works on all iOS browsers */}
+          <input id="gc-input-camera"  type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleFile} />
+          <input id="gc-input-library" type="file" accept="image/*"                       className="sr-only" onChange={handleFile} />
 
           {preview ? (
             <div className="relative mb-4">
@@ -160,24 +149,26 @@ export default function ReportForm({ translations: t }: { translations: FormTran
               >✕</button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <button
-                onClick={openCamera}
-                className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors"
-              >
-                <span className="text-4xl leading-none">📷</span>
-                <span className="text-sm font-semibold">{t.photoButton}</span>
-              </button>
-              <button
-                onClick={openLibrary}
-                className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-              >
-                <span className="text-4xl leading-none">🖼️</span>
-                <span className="text-sm font-semibold">{t.photoLibrary}</span>
-              </button>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <label
+                  htmlFor="gc-input-camera"
+                  className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors cursor-pointer select-none"
+                >
+                  <span className="text-4xl leading-none">📷</span>
+                  <span className="text-sm font-semibold">{t.photoButton}</span>
+                </label>
+                <label
+                  htmlFor="gc-input-library"
+                  className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer select-none"
+                >
+                  <span className="text-4xl leading-none">🖼️</span>
+                  <span className="text-sm font-semibold">{t.photoLibrary}</span>
+                </label>
+              </div>
+              <p className="text-xs text-center text-gray-400 mb-4">{t.photoHint}</p>
+            </>
           )}
-          {!preview && <p className="text-xs text-center text-gray-400 mb-4">{t.photoHint}</p>}
 
           {/* EXIF status */}
           {exifScanning && (

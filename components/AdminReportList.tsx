@@ -107,6 +107,28 @@ export default function AdminReportList({
     })
   }
 
+  async function forwardReport(r: AdminReport) {
+    const muniName = r.municipality?.name_el ?? 'τον δήμο'
+    if (!confirm(`Αποστολή email ειδοποίησης στον "${muniName}";`)) return
+    setLoadingId(r.id)
+    try {
+      const res = await fetch(`/api/admin/report/${r.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'forward' }),
+      })
+      const data = await res.json() as { ok?: boolean; error?: string; warning?: string }
+      if (!res.ok && res.status !== 207) {
+        alert(`Σφάλμα: ${data.error ?? 'Αποτυχία αποστολής'}`)
+        return
+      }
+      if (data.warning) alert(`⚠ ${data.warning}`)
+      router.refresh()
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
   async function saveEdit(id: string) {
     await runAction(id, 'PATCH', {
       action:          'edit',
@@ -222,12 +244,22 @@ export default function AdminReportList({
                       )}
 
                       {mode === 'approved' && (
-                        <button
-                          onClick={() => runAction(r.id, 'PATCH', { action: 'deactivate' })}
-                          className="text-xs text-orange-500 font-semibold hover:underline"
-                        >
-                          Απενεργοποίηση
-                        </button>
+                        <>
+                          {r.municipality_id && r.status !== 'forwarded' && (
+                            <button
+                              onClick={() => forwardReport(r)}
+                              className="text-xs text-purple-600 font-semibold hover:underline"
+                            >
+                              📨 Προώθηση
+                            </button>
+                          )}
+                          <button
+                            onClick={() => runAction(r.id, 'PATCH', { action: 'deactivate' })}
+                            className="text-xs text-orange-500 font-semibold hover:underline"
+                          >
+                            Απενεργοποίηση
+                          </button>
+                        </>
                       )}
 
                       <button

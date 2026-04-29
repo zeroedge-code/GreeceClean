@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { sendEmail } from '@/lib/email'
+import { buildMunicipalityReportEmail, type ReportForEmail } from '@/lib/emailTemplates'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -30,6 +32,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     update = { is_approved: false, status: 'rejected' }
   } else if (body.action === 'deactivate') {
     update = { is_approved: false, status: 'pending' }
+  } else if (body.action === 'forward') {
+    return handleForward(id)
   } else if (body.action === 'edit') {
     update = {}
     if (body.category && VALID_CATEGORIES.includes(body.category)) update.category = body.category
@@ -53,6 +57,70 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (error) {
     console.error('Admin PATCH error:', error)
     return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}
+
+async function handleForward(id: string): Promise<NextResponse> {
+  const { data: report, error: fetchError } = await supabaseAdmin
+    .from('reports')
+    .select('id, public_token, category, description, lat, lng, image_url, created_at, status, municipality_id, municipality:municipality_id(id, name_el, email_official)')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !report) {
+    return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+  }
+
+  const muni = report.municipality as unknown as { id: string; name_el: string; email_official: string | null } | null
+
+  if (!muni) {
+    return NextResponse.json({ error: 'Δεν έχει οριστεί δήμος για αυτή την αναφορά' }, { status: 422 })
+  }
+  if (!muni.email_official) {
+    return NextResponse.json({ error: `Ο δήμος ${muni.name_el} δεν έχει email επικοινωνίας` }, { status: 422 })
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from('reports')
+    .update({ status: 'forwarded' })
+    .eq('id', id)
+
+  if (updateError) {
+    console.error('Forward update error:', updateError)
+    return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+  }
+
+  const { subject, html } = buildMunicipalityReportEmail(
+    report as unknown as ReportForEmail,
+    { id: muni.id, name_el: muni.name_el, email_official: muni.email_official },
+  )
+
+  let emailStatus: 'sent' | 'failed' = 'sent'
+  let emailError: string | null = null
+
+  try {
+    await sendEmail({ to: muni.email_official, subject, html })
+  } catch (e) {
+    emailStatus = 'failed'
+    emailError = e instanceof Error ? e.message : 'Unknown error'
+    console.error('Forward email error:', emailError)
+  }
+
+  await supabaseAdmin.from('email_logs').insert({
+    report_id:        id,
+    municipality_id:  muni.id,
+    recipient_email:  muni.email_official,
+    status:           emailStatus,
+    error_message:    emailError,
+  })
+
+  if (emailStatus === 'failed') {
+    return NextResponse.json(
+      { ok: true, warning: `Το status άλλαξε σε "forwarded" αλλά το email απέτυχε: ${emailError}` },
+      { status: 207 },
+    )
   }
 
   return NextResponse.json({ ok: true })

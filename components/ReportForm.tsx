@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
+import exifr from 'exifr'
 import type { Dictionary } from '@/lib/i18n/types'
 
 type FormTranslations = Dictionary['form']
@@ -46,6 +47,7 @@ export default function ReportForm({ translations: t }: { translations: FormTran
   const [photo,         setPhoto]         = useState<File | null>(null)
   const [preview,       setPreview]       = useState<string | null>(null)
   const [exifCoords,    setExifCoords]    = useState<{ lat: number; lng: number } | null>(null)
+  const [exifFound,     setExifFound]     = useState(false)
   const [exifScanning,  setExifScanning]  = useState(false)
   const [coords,        setCoords]        = useState<{ lat: number; lng: number } | null>(null)
   const [category,      setCategory]      = useState<string | null>(null)
@@ -102,7 +104,8 @@ export default function ReportForm({ translations: t }: { translations: FormTran
       const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' })
       setPhoto(file)
       setPreview(URL.createObjectURL(file))
-      setExifCoords(null) // camera captures have no EXIF
+      setExifCoords(null)
+      setExifFound(false)
       setCoords(null)
     }, 'image/jpeg', 0.92)
   }
@@ -117,16 +120,15 @@ export default function ReportForm({ translations: t }: { translations: FormTran
     setPhoto(file)
     setPreview(URL.createObjectURL(file))
     setExifCoords(null)
+    setExifFound(false)
     setCoords(null)
 
     setExifScanning(true)
     try {
-      const exifr  = await import('exifr')
       const result = await exifr.gps(file)
       if (result?.latitude != null && result?.longitude != null) {
         const { latitude: lat, longitude: lng } = result
-        // Only use EXIF coords if they fall inside Greece — otherwise the server
-        // will reject the submission with "Coordinates outside Greece"
+        setExifFound(true)
         const inGreece = lat >= 34.8 && lat <= 41.8 && lng >= 19.3 && lng <= 29.7
         if (inGreece) {
           setExifCoords({ lat, lng })
@@ -224,7 +226,7 @@ export default function ReportForm({ translations: t }: { translations: FormTran
             <div className="relative mb-4">
               <img src={preview} alt={t.photoTitle} className="w-full rounded-2xl object-cover max-h-72" />
               <button
-                onClick={() => { setPhoto(null); setPreview(null); setExifCoords(null) }}
+                onClick={() => { setPhoto(null); setPreview(null); setExifCoords(null); setExifFound(false) }}
                 className="absolute top-2 right-2 bg-white/80 backdrop-blur rounded-full w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-white shadow text-sm"
                 aria-label={t.photoRemove}
               >✕</button>
@@ -272,6 +274,11 @@ export default function ReportForm({ translations: t }: { translations: FormTran
           {!exifScanning && photo && exifCoords && (
             <p className="flex items-center gap-1.5 text-xs text-action font-medium mb-4">
               📍 {t.locationFound}
+            </p>
+          )}
+          {!exifScanning && photo && exifFound && !exifCoords && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-600 font-medium mb-4">
+              📍 {t.locationExifOutsideGreece}
             </p>
           )}
 

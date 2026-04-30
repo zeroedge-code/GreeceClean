@@ -79,6 +79,7 @@ const de: Dictionary = {
     locationError: 'Standort konnte nicht ermittelt werden. Bitte GPS-Berechtigungen prüfen.',
     locationExifScanning: 'Standort aus Foto wird ermittelt...',
     locationExifNotFound: 'Keine Standortdaten gefunden. Bitte auf der Karte markieren.',
+    locationExifOutsideGreece: 'GPS außerhalb Griechenlands gefunden — bitte Standort auf der Karte auswählen.',
     locationConfirmTitle: 'Standort bestätigen',
     locationSearchPlaceholder: 'Ort suchen…',
     categoryTitle: 'Kategorie',

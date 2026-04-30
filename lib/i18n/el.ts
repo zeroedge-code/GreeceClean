@@ -79,6 +79,7 @@ const el: Dictionary = {
     locationError: 'Δεν ήταν δυνατός ο εντοπισμός θέσης. Ελέγξτε τα δικαιώματα GPS.',
     locationExifScanning: 'Εντοπισμός τοποθεσίας από τη φωτογραφία...',
     locationExifNotFound: 'Δεν βρέθηκαν δεδομένα τοποθεσίας. Παρακαλώ επιλέξτε στο χάρτη.',
+    locationExifOutsideGreece: 'GPS βρέθηκε εκτός Ελλάδας — επιλέξτε τοποθεσία στο χάρτη.',
     locationConfirmTitle: 'Επιβεβαίωση Τοποθεσίας',
     locationSearchPlaceholder: 'Αναζήτηση τοποθεσίας…',
     categoryTitle: 'Κατηγορία',

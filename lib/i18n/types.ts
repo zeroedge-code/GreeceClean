@@ -65,6 +65,7 @@ export type Dictionary = {
     locationError: string
     locationExifScanning: string
     locationExifNotFound: string
+    locationExifOutsideGreece: string
     locationConfirmTitle: string
     locationSearchPlaceholder: string
     categoryTitle: string

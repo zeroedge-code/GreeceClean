@@ -79,6 +79,7 @@ const en: Dictionary = {
     locationError: 'Could not detect location. Please check your GPS permissions.',
     locationExifScanning: 'Detecting location from photo...',
     locationExifNotFound: 'No location data found. Please select on the map.',
+    locationExifOutsideGreece: 'GPS found outside Greece — please select location on the map.',
     locationConfirmTitle: 'Confirm Location',
     locationSearchPlaceholder: 'Search for a location…',
     categoryTitle: 'Category',

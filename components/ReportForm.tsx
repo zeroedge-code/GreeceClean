@@ -6,6 +6,7 @@ import exifr from 'exifr'
 import type { Dictionary } from '@/lib/i18n/types'
 
 type FormTranslations = Dictionary['form']
+type CopyTranslations = Dictionary['copy']
 type Step = 'photo' | 'location' | 'category' | 'success'
 const STEPS: Step[] = ['photo', 'location', 'category']
 
@@ -42,7 +43,13 @@ function StepDots({ current, t }: { current: Step; t: FormTranslations }) {
   )
 }
 
-export default function ReportForm({ translations: t }: { translations: FormTranslations }) {
+export default function ReportForm({
+  translations: t,
+  copyTranslations: ct,
+}: {
+  translations: FormTranslations
+  copyTranslations: CopyTranslations
+}) {
   const [step,          setStep]          = useState<Step>('photo')
   const [photo,         setPhoto]         = useState<File | null>(null)
   const [preview,       setPreview]       = useState<string | null>(null)
@@ -107,6 +114,21 @@ export default function ReportForm({ translations: t }: { translations: FormTran
       setExifCoords(null)
       setExifFound(false)
       setCoords(null)
+      // Canvas frames have no EXIF — fall back to device geolocation
+      if (navigator.geolocation) {
+        setExifScanning(true)
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude: lat, longitude: lng } = pos.coords
+            setExifFound(true)
+            const inGreece = lat >= 34.5 && lat <= 42.2 && lng >= 19.0 && lng <= 30.0
+            if (inGreece) setExifCoords({ lat, lng })
+            setExifScanning(false)
+          },
+          () => { setExifScanning(false) },
+          { timeout: 8000, maximumAge: 60000 },
+        )
+      }
     }, 'image/jpeg', 0.92)
   }
 
@@ -129,7 +151,7 @@ export default function ReportForm({ translations: t }: { translations: FormTran
       if (result?.latitude != null && result?.longitude != null) {
         const { latitude: lat, longitude: lng } = result
         setExifFound(true)
-        const inGreece = lat >= 34.8 && lat <= 41.8 && lng >= 19.3 && lng <= 29.7
+        const inGreece = lat >= 34.5 && lat <= 42.2 && lng >= 19.0 && lng <= 30.0
         if (inGreece) {
           setExifCoords({ lat, lng })
         }
@@ -388,7 +410,7 @@ export default function ReportForm({ translations: t }: { translations: FormTran
                 copied ? 'bg-action text-white' : 'bg-primary text-white hover:bg-primary-600'
               }`}
             >
-              {copied ? '✓ ' + t.successLinkLabel : '📋 ' + t.successLinkLabel}
+              {copied ? ct.copied : ct.copy}
             </button>
           </div>
 

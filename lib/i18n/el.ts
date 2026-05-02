@@ -70,6 +70,7 @@ const el: Dictionary = {
     photoLibrary: '🖼️ Βιβλιοθήκη',
     photoHint: 'JPG · PNG · HEIC · max 10 MB',
     photoRemove: 'Αφαίρεση φωτογραφίας',
+    photoCameraError: 'Δεν επετράπη η πρόσβαση στην κάμερα. Ελέγξτε τα δικαιώματα στις ρυθμίσεις.',
     locationTitle: 'Τοποθεσία',
     locationDesc: 'Εντοπισμός της θέσης σου μέσω GPS.',
     locationFound: 'Τοποθεσία εντοπίστηκε',
@@ -80,8 +81,13 @@ const el: Dictionary = {
     locationExifScanning: 'Εντοπισμός τοποθεσίας από τη φωτογραφία...',
     locationExifNotFound: 'Δεν βρέθηκαν δεδομένα τοποθεσίας. Παρακαλώ επιλέξτε στο χάρτη.',
     locationExifOutsideGreece: 'GPS βρέθηκε εκτός Ελλάδας — επιλέξτε τοποθεσία στο χάρτη.',
+    locationShowMap: '🗺️ Εμφάνιση χάρτη',
     locationConfirmTitle: 'Επιβεβαίωση Τοποθεσίας',
     locationSearchPlaceholder: 'Αναζήτηση τοποθεσίας…',
+    locationAdjustHint: 'Πάτα στον χάρτη για να μετακινήσεις τον δείκτη',
+    photosMultiDesc: 'Πρόσθεσε έως 3 φωτογραφίες · η πρώτη είναι η κύρια',
+    submitTitle: 'Σχεδόν έτοιμο!',
+    submitSkip: 'Παράλειψη περιγραφής & υποβολή →',
     categoryTitle: 'Κατηγορία',
     categoryDesc: 'Τι είδους πρόβλημα είναι αυτό;',
     descLabel: 'Περιγραφή',
@@ -104,7 +110,11 @@ const el: Dictionary = {
     ],
   },
 
-  map: { unknownMunicipality: 'Άγνωστος Δήμος', viewReport: 'Προβολή αναφοράς →' },
+  map: {
+    unknownMunicipality: 'Άγνωστος Δήμος',
+    viewReport: 'Προβολή αναφοράς →',
+    statuses: { pending: 'Εκκρεμεί', in_review: 'Υπό Εξέταση', forwarded: 'Εστάλη στον Δήμο', resolved: 'Καθαρίστηκε', rejected: 'Απορρίφθηκε' },
+  },
 }
 
 export default el

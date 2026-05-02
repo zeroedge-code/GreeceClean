@@ -56,6 +56,7 @@ export type Dictionary = {
     photoLibrary: string
     photoHint: string
     photoRemove: string
+    photoCameraError: string
     locationTitle: string
     locationDesc: string
     locationFound: string
@@ -66,8 +67,13 @@ export type Dictionary = {
     locationExifScanning: string
     locationExifNotFound: string
     locationExifOutsideGreece: string
+    locationShowMap: string
     locationConfirmTitle: string
     locationSearchPlaceholder: string
+    locationAdjustHint: string
+    photosMultiDesc: string
+    submitTitle: string
+    submitSkip: string
     categoryTitle: string
     categoryDesc: string
     descLabel: string
@@ -84,5 +90,9 @@ export type Dictionary = {
     categories: Array<{ id: string; label: string; icon: string }>
   }
 
-  map: { unknownMunicipality: string; viewReport: string }
+  map: {
+    unknownMunicipality: string
+    viewReport: string
+    statuses: { pending: string; in_review: string; forwarded: string; resolved: string; rejected: string }
+  }
 }

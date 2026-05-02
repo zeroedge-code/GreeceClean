@@ -39,6 +39,7 @@ create table if not exists reports (
   id              uuid primary key default gen_random_uuid(),
   public_token    text not null unique default encode(gen_random_bytes(6), 'hex'),
   image_url       text,
+  image_urls      jsonb,
   lat             double precision not null,
   lng             double precision not null,
   category        text not null default 'other',
@@ -58,6 +59,7 @@ end $$;
 
 -- Add columns that may be missing from older installs
 alter table reports add column if not exists image_url       text;
+alter table reports add column if not exists image_urls      jsonb;
 alter table reports add column if not exists description     text;
 alter table reports add column if not exists lat             double precision;
 alter table reports add column if not exists lng             double precision;

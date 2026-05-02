@@ -7,21 +7,73 @@ import type { Dictionary } from '@/lib/i18n/types'
 
 type FormTranslations = Dictionary['form']
 type CopyTranslations = Dictionary['copy']
-type Step = 'photo' | 'location' | 'category' | 'success'
-const STEPS: Step[] = ['photo', 'location', 'category']
+type Step = 'category' | 'photos' | 'location' | 'submit' | 'success'
+const STEPS: Step[] = ['category', 'photos', 'location', 'submit']
 
+// ── LocalStorage draft ────────────────────────────────────────────────────────
+const DRAFT_KEY = 'gc_draft'
+type Draft = { category?: string; coords?: { lat: number; lng: number }; description?: string }
+
+function saveDraft(updates: Partial<Draft>) {
+  try {
+    const existing: Draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}')
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...existing, ...updates }))
+  } catch { /* ignore */ }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+}
+
+// ── Lazy Leaflet ──────────────────────────────────────────────────────────────
 const LocationPickerDynamic = dynamic(() => import('./LocationPicker'), {
   ssr: false,
   loading: () => (
-    <div className="w-full rounded-2xl border border-gray-200 bg-gray-100 flex items-center justify-center" style={{ height: 320 }}>
-      <span className="text-gray-400 text-sm">⏳</span>
+    <div className="w-full rounded-2xl border border-gray-200 bg-gray-100 flex items-center justify-center" style={{ height: 280 }}>
+      <span className="text-gray-400 animate-spin">⏳</span>
     </div>
   ),
 })
 
+// ── Photo helpers ─────────────────────────────────────────────────────────────
+type PhotoEntry = { file: File; preview: string }
+
+// Downsample to max 1200px and produce a compressed File for submission.
+// Keeps the large original blob out of React state, preventing OOM on mobile
+// and Vercel 4.5 MB request limit (HTTP 413).
+function compressToFile(file: File, maxPx = 1200): Promise<{ preview: string; compressed: File }> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d')?.drawImage(img, 0, 0, w, h)
+      const preview = canvas.toDataURL('image/jpeg', 0.82)
+      canvas.toBlob((blob) => {
+        const compressed = blob ? new File([blob], 'photo.jpg', { type: 'image/jpeg' }) : file
+        resolve({ preview, compressed })
+      }, 'image/jpeg', 0.82)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve({ preview: url, compressed: file }) }
+    img.src = url
+  })
+}
+
+// ── Step dots ─────────────────────────────────────────────────────────────────
 function StepDots({ current, t }: { current: Step; t: FormTranslations }) {
   const idx    = STEPS.indexOf(current)
-  const labels = [t.photoTitle, t.locationTitle, t.categoryTitle]
+  const labels = [
+    t.categoryTitle,
+    t.photoTitle,
+    t.locationTitle,
+    t.submit.split(' ')[0],
+  ]
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
       {STEPS.map((s, i) => (
@@ -43,6 +95,7 @@ function StepDots({ current, t }: { current: Step; t: FormTranslations }) {
   )
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export default function ReportForm({
   translations: t,
   copyTranslations: ct,
@@ -50,45 +103,58 @@ export default function ReportForm({
   translations: FormTranslations
   copyTranslations: CopyTranslations
 }) {
-  const [step,          setStep]          = useState<Step>('photo')
-  const [photo,         setPhoto]         = useState<File | null>(null)
-  const [preview,       setPreview]       = useState<string | null>(null)
-  const [exifCoords,    setExifCoords]    = useState<{ lat: number; lng: number } | null>(null)
-  const [exifFound,     setExifFound]     = useState(false)
-  const [exifScanning,  setExifScanning]  = useState(false)
-  const [coords,        setCoords]        = useState<{ lat: number; lng: number } | null>(null)
-  const [category,      setCategory]      = useState<string | null>(null)
-  const [description,   setDescription]   = useState('')
-  const [submitting,    setSubmitting]    = useState(false)
-  const [submitError,   setSubmitError]   = useState<string | null>(null)
-  const [trackingUrl,   setTrackingUrl]   = useState('')
-  const [copied,        setCopied]        = useState(false)
-  const [honeyValue,    setHoneyValue]    = useState('')
+  const [step,         setStep]        = useState<Step>('category')
+  const [category,     setCategory]    = useState<string | null>(null)
+  const [photos,       setPhotos]      = useState<PhotoEntry[]>([])
+  const [exifCoords,   setExifCoords]  = useState<{ lat: number; lng: number } | null>(null)
+  const [exifScanning, setExifScanning] = useState(false)
+  const [coords,       setCoords]      = useState<{ lat: number; lng: number } | null>(null)
+  const [description,  setDescription] = useState('')
+  const [submitting,   setSubmitting]  = useState(false)
+  const [submitError,  setSubmitError] = useState<string | null>(null)
+  const [trackingUrl,  setTrackingUrl] = useState('')
+  const [copied,       setCopied]      = useState(false)
+  const [honeyValue,   setHoneyValue]  = useState('')
 
-  // ── Camera capture (getUserMedia — no file input, no capture attribute) ───
+  // ── Camera state ────────────────────────────────────────────────────────────
   const [cameraStream,   setCameraStream]   = useState<MediaStream | null>(null)
   const [showCameraView, setShowCameraView] = useState(false)
+  const [cameraError,    setCameraError]    = useState(false)
   const videoRef  = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Attach stream to video element once both are mounted
+  // Attach stream to video element
   useEffect(() => {
     const video = videoRef.current
     if (!video || !cameraStream) return
     video.srcObject = cameraStream
   }, [cameraStream, showCameraView])
 
+  // ── Restore LocalStorage draft on mount ─────────────────────────────────────
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (!saved) return
+      const draft: Draft = JSON.parse(saved)
+      if (draft.category) {
+        setCategory(draft.category)
+        setStep('photos') // skip category since it's already chosen
+      }
+      if (draft.coords) setCoords(draft.coords)
+      if (draft.description) setDescription(draft.description)
+    } catch { /* ignore */ }
+  }, [])
+
+  // ── Camera helpers ───────────────────────────────────────────────────────────
   async function openCameraView() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      // Browser doesn't support getUserMedia — do nothing (button is hidden in that case)
-      return
-    }
+    if (!navigator.mediaDevices?.getUserMedia) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      setCameraError(false)
       setShowCameraView(true)
       setCameraStream(stream)
     } catch {
-      // Permission denied or no camera — silently ignore
+      setCameraError(true)
     }
   }
 
@@ -108,74 +174,83 @@ export default function ReportForm({
     stopCamera()
     canvas.toBlob((blob) => {
       if (!blob) return
-      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' })
-      setPhoto(file)
-      setPreview(URL.createObjectURL(file))
-      setExifCoords(null)
-      setExifFound(false)
-      setCoords(null)
-      // Canvas frames have no EXIF — fall back to device geolocation
-      if (navigator.geolocation) {
-        setExifScanning(true)
+      const file    = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      const preview = URL.createObjectURL(blob)
+      setPhotos(prev => [...prev, { file, preview }])
+      // Camera frames carry no EXIF — try device GPS if no coords yet
+      if (!exifCoords && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude: lat, longitude: lng } = pos.coords
-            setExifFound(true)
-            const inGreece = lat >= 34.5 && lat <= 42.2 && lng >= 19.0 && lng <= 30.0
-            if (inGreece) setExifCoords({ lat, lng })
-            setExifScanning(false)
-          },
-          () => { setExifScanning(false) },
-          { timeout: 8000, maximumAge: 60000 },
+          (pos) => setExifCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => null,
+          { timeout: 8000, maximumAge: 60_000 },
         )
       }
-    }, 'image/jpeg', 0.92)
+    }, 'image/jpeg', 0.82)
   }
 
-  // ── Library file selection + EXIF extraction ──────────────────────────────
+  // ── Library file handler ─────────────────────────────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    // Reset the input value so the same file can be re-selected
+    if (!file || photos.length >= 3) return
     e.target.value = ''
 
-    setPhoto(file)
-    setPreview(URL.createObjectURL(file))
-    setExifCoords(null)
-    setExifFound(false)
-    setCoords(null)
+    const shouldScanExif = !exifCoords
+    if (shouldScanExif) setExifScanning(true)
 
-    setExifScanning(true)
-    try {
-      const result = await exifr.gps(file)
-      if (result?.latitude != null && result?.longitude != null) {
-        const { latitude: lat, longitude: lng } = result
-        setExifFound(true)
-        const inGreece = lat >= 34.5 && lat <= 42.2 && lng >= 19.0 && lng <= 30.0
-        if (inGreece) {
-          setExifCoords({ lat, lng })
-        }
-      }
-    } catch {
-      // EXIF read failure is non-fatal
-    } finally {
-      setExifScanning(false)
-    }
+    const [{ preview, compressed }] = await Promise.all([
+      compressToFile(file),
+      shouldScanExif
+        ? exifr.gps(file).then((result) => {
+            if (result?.latitude != null && result?.longitude != null) {
+              setExifCoords({ lat: result.latitude, lng: result.longitude })
+            }
+          }).catch(() => null)
+        : Promise.resolve(null),
+    ])
+
+    if (shouldScanExif) setExifScanning(false)
+    setPhotos(prev => [...prev, { file: compressed, preview }])
   }
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    if (!photo || !coords || !category) return
+  // ── Photo management ─────────────────────────────────────────────────────────
+  function removePhoto(index: number) {
+    setPhotos(prev => {
+      const next = prev.filter((_, i) => i !== index)
+      if (next.length === 0) setExifCoords(null)
+      return next
+    })
+  }
+
+  function movePhoto(from: number, direction: -1 | 1) {
+    const to = from + direction
+    if (to < 0 || to >= photos.length) return
+    setPhotos(prev => {
+      const arr = [...prev]
+      ;[arr[from], arr[to]] = [arr[to], arr[from]]
+      return arr
+    })
+  }
+
+  // ── Location confirmed ───────────────────────────────────────────────────────
+  function handleLocationConfirm(c: { lat: number; lng: number }) {
+    setCoords(c)
+    saveDraft({ coords: c })
+    setStep('submit')
+  }
+
+  // ── Submit ───────────────────────────────────────────────────────────────────
+  const handleSubmit = async (skipDescription = false) => {
+    if (!photos.length || !coords || !category) return
     setSubmitting(true)
     setSubmitError(null)
 
     const fd = new FormData()
-    fd.append('image',    photo)
+    photos.forEach((p, i) => fd.append(i === 0 ? 'image' : `image${i + 1}`, p.file))
     fd.append('lat',      String(coords.lat))
     fd.append('lng',      String(coords.lng))
     fd.append('category', category)
     fd.append('hp_field', honeyValue)
-    if (description.trim()) fd.append('description', description.trim())
+    if (!skipDescription && description.trim()) fd.append('description', description.trim())
 
     try {
       const res = await fetch('/api/report', { method: 'POST', body: fd })
@@ -185,6 +260,7 @@ export default function ReportForm({
       }
       const data = (await res.json()) as { trackingUrl: string }
       setTrackingUrl(data.trackingUrl)
+      clearDraft()
       setStep('success')
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Error')
@@ -200,29 +276,48 @@ export default function ReportForm({
     })
   }
 
-  function handleLocationConfirm(c: { lat: number; lng: number }) {
-    setCoords(c)
-    setStep('category')
-  }
-
   const supportsCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
       {step !== 'success' && <StepDots current={step} t={t} />}
 
-      {/* ── STEP 1: Photo ──────────────────────────────────────────────────── */}
-      {step === 'photo' && (
+      {/* ── STEP 1: Category ──────────────────────────────────────────────── */}
+      {step === 'category' && (
+        <div>
+          <h2 className="text-2xl font-bold text-primary mb-1">{t.categoryTitle}</h2>
+          <p className="text-gray-500 text-sm mb-6">{t.categoryDesc}</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            {t.categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  setCategory(cat.id)
+                  saveDraft({ category: cat.id })
+                  setStep('photos')
+                }}
+                className="card p-4 text-left flex flex-col gap-2 transition-all duration-150 border-2 border-transparent hover:border-primary/30 hover:bg-primary/5 active:scale-95"
+              >
+                <span className="text-3xl leading-none">{cat.icon}</span>
+                <span className="text-sm font-semibold text-gray-800 leading-snug">{cat.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 2: Photos ────────────────────────────────────────────────── */}
+      {step === 'photos' && (
         <div>
           <h2 className="text-2xl font-bold text-primary mb-1">{t.photoTitle}</h2>
-          <p className="text-gray-500 text-sm mb-6">{t.photoDesc}</p>
+          <p className="text-gray-500 text-sm mb-5">{t.photosMultiDesc}</p>
 
-          {/* ── Live camera viewfinder (getUserMedia) ── */}
+          {/* ── Live camera viewfinder ── */}
           {showCameraView && (
             <div className="relative mb-4 rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               <canvas ref={canvasRef} className="hidden" />
-              {/* Shutter controls */}
               <div className="absolute bottom-5 inset-x-0 flex items-center justify-between px-8">
                 <button
                   onClick={stopCamera}
@@ -230,7 +325,6 @@ export default function ReportForm({
                 >
                   {t.navBack}
                 </button>
-                {/* Classic shutter button */}
                 <button
                   onClick={captureFrame}
                   className="w-16 h-16 rounded-full bg-white shadow-xl flex items-center justify-center"
@@ -243,37 +337,66 @@ export default function ReportForm({
             </div>
           )}
 
-          {/* ── Photo preview ── */}
-          {!showCameraView && preview && (
-            <div className="relative mb-4">
-              <img src={preview} alt={t.photoTitle} className="w-full rounded-2xl object-cover max-h-72" />
-              <button
-                onClick={() => { setPhoto(null); setPreview(null); setExifCoords(null); setExifFound(false) }}
-                className="absolute top-2 right-2 bg-white/80 backdrop-blur rounded-full w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-white shadow text-sm"
-                aria-label={t.photoRemove}
-              >✕</button>
+          {/* ── Photo thumbnails with reorder + remove ── */}
+          {!showCameraView && photos.length > 0 && (
+            <div className="flex gap-3 mb-4 overflow-x-auto pb-1">
+              {photos.map((p, i) => (
+                <div key={i} className="relative shrink-0">
+                  <img
+                    src={p.preview}
+                    alt={`Photo ${i + 1}`}
+                    className={`rounded-xl object-cover ${photos.length === 1 ? 'w-40 h-40' : 'w-28 h-28'}`}
+                  />
+                  {/* Position badge */}
+                  <div className="absolute top-1 left-1 bg-black/60 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {i + 1}
+                  </div>
+                  {/* Remove */}
+                  <button
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-1 right-1 bg-white/90 rounded-full w-6 h-6 flex items-center justify-center text-gray-700 shadow text-xs"
+                    aria-label={t.photoRemove}
+                  >✕</button>
+                  {/* Reorder arrows */}
+                  {photos.length > 1 && (
+                    <div className="absolute bottom-1 inset-x-1 flex justify-between">
+                      <button
+                        onClick={() => movePhoto(i, -1)}
+                        disabled={i === 0}
+                        className="bg-black/50 text-white rounded text-xs px-1 disabled:opacity-0"
+                      >←</button>
+                      <button
+                        onClick={() => movePhoto(i, 1)}
+                        disabled={i === photos.length - 1}
+                        className="bg-black/50 text-white rounded text-xs px-1 disabled:opacity-0"
+                      >→</button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
-          {/* ── Camera / Library picker (shown when no photo yet) ── */}
-          {!showCameraView && !preview && (
+          {/* ── Add photo buttons (camera + library) ── */}
+          {!showCameraView && photos.length < 3 && (
             <>
               <div className={`grid gap-3 mb-3 ${supportsCamera ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {/* Camera: getUserMedia — no file input, no capture attribute */}
                 {supportsCamera && (
                   <button
                     onClick={openCameraView}
-                    className="h-36 border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors"
+                    className={`border-2 border-dashed border-primary-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary-50 active:bg-primary-100 transition-colors ${photos.length === 0 ? 'h-36' : 'h-20'}`}
                   >
-                    <span className="text-4xl leading-none">📷</span>
-                    <span className="text-sm font-semibold">{t.photoButton}</span>
+                    <span className={`${photos.length === 0 ? 'text-4xl' : 'text-2xl'} leading-none`}>📷</span>
+                    <span className={`${photos.length === 0 ? 'text-sm' : 'text-xs'} font-semibold`}>
+                      {photos.length === 0 ? t.photoButton : '+ 📷'}
+                    </span>
                   </button>
                 )}
-
-                {/* Library: plain file input, NO capture attribute */}
-                <label className="h-36 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer select-none">
-                  <span className="text-4xl leading-none">🖼️</span>
-                  <span className="text-sm font-semibold">{t.photoLibrary}</span>
+                <label className={`border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer select-none ${photos.length === 0 ? 'h-36' : 'h-20'}`}>
+                  <span className={`${photos.length === 0 ? 'text-4xl' : 'text-2xl'} leading-none`}>🖼️</span>
+                  <span className={`${photos.length === 0 ? 'text-sm' : 'text-xs'} font-semibold`}>
+                    {photos.length === 0 ? t.photoLibrary : '+ 🖼️'}
+                  </span>
                   <input
                     type="file"
                     accept="image/*"
@@ -282,74 +405,71 @@ export default function ReportForm({
                   />
                 </label>
               </div>
-              <p className="text-xs text-center text-gray-400 mb-4">{t.photoHint}</p>
+              {photos.length === 0 && (
+                <p className="text-xs text-center text-gray-400 mb-2">{t.photoHint}</p>
+              )}
+              {cameraError && (
+                <p className="flex items-center gap-1.5 text-xs text-red-600 font-medium mb-2">
+                  ⚠️ {t.photoCameraError}
+                </p>
+              )}
             </>
           )}
 
-          {/* EXIF status */}
+          {/* EXIF / GPS status */}
           {exifScanning && (
             <p className="flex items-center gap-2 text-xs text-gray-500 mb-4">
               <span className="animate-spin inline-block">⏳</span>
               {t.locationExifScanning}
             </p>
           )}
-          {!exifScanning && photo && exifCoords && (
+          {!exifScanning && exifCoords && photos.length > 0 && (
             <p className="flex items-center gap-1.5 text-xs text-action font-medium mb-4">
               📍 {t.locationFound}
             </p>
           )}
-          {!exifScanning && photo && exifFound && !exifCoords && (
-            <p className="flex items-center gap-1.5 text-xs text-amber-600 font-medium mb-4">
-              📍 {t.locationExifOutsideGreece}
-            </p>
-          )}
 
           {!showCameraView && (
-            <button
-              disabled={!photo || exifScanning}
-              onClick={() => setStep('location')}
-              className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {t.navNext}
-            </button>
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={() => setStep('category')}
+                className="flex-1 border border-gray-200 rounded-2xl py-3 text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                {t.navBack}
+              </button>
+              <button
+                disabled={photos.length === 0 || exifScanning}
+                onClick={() => setStep('location')}
+                className="flex-1 btn-primary disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {exifScanning && <span className="animate-spin inline-block leading-none">⏳</span>}
+                {t.navNext}
+              </button>
+            </div>
           )}
         </div>
       )}
 
-      {/* ── STEP 2: Location map picker ────────────────────────────────────── */}
+      {/* ── STEP 3: Location ──────────────────────────────────────────────── */}
       {step === 'location' && (
         <div>
-          <h2 className="text-2xl font-bold text-primary mb-1">{t.locationConfirmTitle}</h2>
+          <h2 className="text-2xl font-bold text-primary mb-1">{t.locationTitle}</h2>
           <p className="text-gray-500 text-sm mb-4">
-            {exifCoords ? t.locationDesc : t.locationExifNotFound}
+            {exifCoords ? t.locationFound : t.locationDesc}
           </p>
           <LocationPickerDynamic
             initialCoords={coords ?? exifCoords}
-            exifDetected={exifCoords !== null}
             onConfirm={handleLocationConfirm}
-            onBack={() => setStep('photo')}
+            onBack={() => setStep('photos')}
             t={t}
           />
         </div>
       )}
 
-      {/* ── STEP 3: Category + description ────────────────────────────────── */}
-      {step === 'category' && (
+      {/* ── STEP 4: Submit ────────────────────────────────────────────────── */}
+      {step === 'submit' && (
         <div>
-          <h2 className="text-2xl font-bold text-primary mb-1">{t.categoryTitle}</h2>
-          <p className="text-gray-500 text-sm mb-6">{t.categoryDesc}</p>
-
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {t.categories.map((cat) => (
-              <button key={cat.id} onClick={() => setCategory(cat.id)}
-                className={`card p-4 text-left flex flex-col gap-2 transition-all border-2 ${
-                  category === cat.id ? 'border-action bg-action/5' : 'border-transparent hover:border-gray-200'
-                }`}>
-                <span className="text-2xl leading-none">{cat.icon}</span>
-                <span className="text-sm font-medium text-gray-800 leading-snug">{cat.label}</span>
-              </button>
-            ))}
-          </div>
+          <h2 className="text-2xl font-bold text-primary mb-5">{t.submitTitle}</h2>
 
           <div className="mb-6">
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -358,9 +478,9 @@ export default function ReportForm({
             <textarea
               id="description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => { setDescription(e.target.value); saveDraft({ description: e.target.value }) }}
               maxLength={500}
-              rows={3}
+              rows={4}
               placeholder={t.descPlaceholder}
               className="w-full border border-gray-300 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             />
@@ -376,14 +496,16 @@ export default function ReportForm({
 
           {submitError && <p className="text-red-500 text-sm text-center mb-3">⚠️ {submitError}</p>}
 
-          <div className="flex gap-3">
-            <button onClick={() => setStep('location')}
-              className="flex-1 border border-gray-200 rounded-2xl py-3 text-gray-600 hover:bg-gray-50 transition-colors">
+          <div className="flex gap-3 mb-3">
+            <button
+              onClick={() => setStep('location')}
+              className="flex-1 border border-gray-200 rounded-2xl py-3 text-gray-600 hover:bg-gray-50 transition-colors"
+            >
               {t.navBack}
             </button>
             <button
-              disabled={!category || submitting}
-              onClick={handleSubmit}
+              disabled={submitting}
+              onClick={() => handleSubmit(false)}
               className="flex-1 btn-action disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting
@@ -391,10 +513,19 @@ export default function ReportForm({
                 : t.submit}
             </button>
           </div>
+
+          {!submitting && (
+            <button
+              onClick={() => handleSubmit(true)}
+              className="w-full text-xs text-gray-400 hover:text-gray-600 text-center py-1.5 transition-colors"
+            >
+              {t.submitSkip}
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── STEP 4: Success ────────────────────────────────────────────────── */}
+      {/* ── Success ───────────────────────────────────────────────────────── */}
       {step === 'success' && (
         <div className="text-center py-4">
           <div className="text-7xl mb-5 animate-bounce">✅</div>

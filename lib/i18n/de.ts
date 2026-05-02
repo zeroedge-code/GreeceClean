@@ -70,6 +70,7 @@ const de: Dictionary = {
     photoLibrary: '🖼️ Bibliothek',
     photoHint: 'JPG · PNG · HEIC · max 10 MB',
     photoRemove: 'Foto entfernen',
+    photoCameraError: 'Kamerazugriff verweigert. Bitte in den Browser-Einstellungen aktivieren.',
     locationTitle: 'Standort',
     locationDesc: 'Standorterfassung per GPS.',
     locationFound: 'Standort gefunden',
@@ -80,8 +81,13 @@ const de: Dictionary = {
     locationExifScanning: 'Standort aus Foto wird ermittelt...',
     locationExifNotFound: 'Keine Standortdaten gefunden. Bitte auf der Karte markieren.',
     locationExifOutsideGreece: 'GPS außerhalb Griechenlands gefunden — bitte Standort auf der Karte auswählen.',
+    locationShowMap: '🗺️ Auf Karte anzeigen',
     locationConfirmTitle: 'Standort bestätigen',
     locationSearchPlaceholder: 'Ort suchen…',
+    locationAdjustHint: 'Karte antippen, um den Pin zu verschieben',
+    photosMultiDesc: 'Bis zu 3 Fotos hinzufügen · erstes Foto ist das Hauptbild',
+    submitTitle: 'Fast fertig!',
+    submitSkip: 'Beschreibung überspringen & absenden →',
     categoryTitle: 'Kategorie',
     categoryDesc: 'Um welche Art von Problem handelt es sich?',
     descLabel: 'Beschreibung',
@@ -104,7 +110,11 @@ const de: Dictionary = {
     ],
   },
 
-  map: { unknownMunicipality: 'Unbekannte Gemeinde', viewReport: 'Meldung anzeigen →' },
+  map: {
+    unknownMunicipality: 'Unbekannte Gemeinde',
+    viewReport: 'Meldung anzeigen →',
+    statuses: { pending: 'Ausstehend', in_review: 'In Prüfung', forwarded: 'An Gemeinde gesendet', resolved: 'Beseitigt', rejected: 'Abgelehnt' },
+  },
 }
 
 export default de

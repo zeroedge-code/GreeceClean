@@ -8,6 +8,7 @@ type Report = {
   public_token: string
   status: string
   image_url: string | null
+  image_urls?: string[] | null
   lat: number
   lng: number
   category: string
@@ -16,16 +17,53 @@ type Report = {
   municipality: { name_el: string } | null
 }
 
+type NearbyReport = {
+  public_token: string
+  lat: number
+  lng: number
+  category: string
+  municipality: { name_el: string } | null
+  distanceKm: number
+}
+
 async function getReport(token: string): Promise<Report | null> {
   if (isSupabaseConfigured) {
     const { data } = await supabaseAdmin
       .from('reports')
-      .select('public_token, status, image_url, lat, lng, category, created_at, description, municipality:municipality_id(name_el)')
+      .select('public_token, status, image_url, image_urls, lat, lng, category, created_at, description, municipality:municipality_id(name_el)')
       .eq('public_token', token)
       .single()
     if (data) return data as unknown as Report
   }
   return SEED_REPORTS.find((r) => r.public_token === token) ?? null
+}
+
+function calcDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLat = (lat2 - lat1) * (Math.PI / 180)
+  const dLng = (lng2 - lng1) * (Math.PI / 180)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+async function getNearby(current: Report): Promise<[NearbyReport | null, NearbyReport | null]> {
+  let rows: Array<{ public_token: string; lat: number; lng: number; category: string; municipality: { name_el: string } | null }>
+
+  if (isSupabaseConfigured) {
+    const { data } = await supabaseAdmin
+      .from('reports')
+      .select('public_token, lat, lng, category, municipality:municipality_id(name_el)')
+      .eq('is_approved', true)
+    rows = (data ?? []) as unknown as typeof rows
+  } else {
+    rows = SEED_REPORTS as typeof rows
+  }
+
+  const sorted = rows
+    .filter((r) => r.public_token !== current.public_token)
+    .map((r) => ({ ...r, distanceKm: calcDistanceKm(current.lat, current.lng, r.lat, r.lng) }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+
+  return [sorted[0] ?? null, sorted[1] ?? null]
 }
 
 function appUrl() {
@@ -83,6 +121,8 @@ export default async function TrackingPage({
   const t  = getDictionary(locale)
   const tr = t.tracking
 
+  const [nearbyLeft, nearbyRight] = report ? await getNearby(report) : [null, null]
+
   if (!report) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
@@ -122,12 +162,67 @@ export default async function TrackingPage({
       <div className="max-w-lg mx-auto space-y-5">
         <h1 className="text-2xl font-bold text-primary">{tr.pageTitle}</h1>
 
-        {/* Photo */}
-        {report.image_url && (
-          <div className="rounded-2xl overflow-hidden shadow-sm">
-            <img src={report.image_url} alt={tr.pageTitle} className="w-full object-cover max-h-72" />
+        {/* Nearby navigation */}
+        {(nearbyLeft || nearbyRight) && (
+          <div className="flex items-stretch gap-2">
+            {nearbyLeft ? (
+              <a href={`/r/${nearbyLeft.public_token}`}
+                className="flex-1 card flex items-center gap-3 py-3 px-4 hover:bg-gray-50 active:bg-gray-100 transition-colors no-underline">
+                <span className="text-gray-400 text-lg leading-none">←</span>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 mb-0.5">
+                    {nearbyLeft.distanceKm < 1
+                      ? `${Math.round(nearbyLeft.distanceKm * 1000)} m`
+                      : `${nearbyLeft.distanceKm.toFixed(1)} km`}
+                  </p>
+                  <p className="text-sm font-semibold text-primary truncate">
+                    {tr.categories[nearbyLeft.category as keyof typeof tr.categories] ?? nearbyLeft.category}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{nearbyLeft.municipality?.name_el ?? ''}</p>
+                </div>
+              </a>
+            ) : <div className="flex-1" />}
+
+            {nearbyRight ? (
+              <a href={`/r/${nearbyRight.public_token}`}
+                className="flex-1 card flex items-center gap-3 py-3 px-4 hover:bg-gray-50 active:bg-gray-100 transition-colors no-underline text-right justify-end">
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 mb-0.5">
+                    {nearbyRight.distanceKm < 1
+                      ? `${Math.round(nearbyRight.distanceKm * 1000)} m`
+                      : `${nearbyRight.distanceKm.toFixed(1)} km`}
+                  </p>
+                  <p className="text-sm font-semibold text-primary truncate">
+                    {tr.categories[nearbyRight.category as keyof typeof tr.categories] ?? nearbyRight.category}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{nearbyRight.municipality?.name_el ?? ''}</p>
+                </div>
+                <span className="text-gray-400 text-lg leading-none">→</span>
+              </a>
+            ) : <div className="flex-1" />}
           </div>
         )}
+
+        {/* Photos */}
+        {report.image_url && (() => {
+          const allUrls = report.image_urls?.length ? report.image_urls : [report.image_url]
+          return allUrls.length === 1 ? (
+            <div className="rounded-2xl overflow-hidden shadow-sm">
+              <img src={allUrls[0]} alt={tr.pageTitle} className="w-full object-cover max-h-72" />
+            </div>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {allUrls.map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  alt={`${tr.pageTitle} ${i + 1}`}
+                  className="h-56 w-auto rounded-2xl object-cover shrink-0 shadow-sm"
+                />
+              ))}
+            </div>
+          )
+        })()}
 
         {/* Map */}
         <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm h-52">

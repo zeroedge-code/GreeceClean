@@ -3,7 +3,7 @@ import sharp from 'sharp'
 import { reverseGeocode } from '@/lib/geocoding'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
-const MAX_BYTES = 500 * 1024 // 500 KB
+const MAX_BYTES = 500 * 1024 // 500 KB per image
 const STORAGE_BUCKET = 'reports'
 
 async function compressImage(raw: Buffer): Promise<Buffer> {
@@ -11,6 +11,7 @@ async function compressImage(raw: Buffer): Promise<Buffer> {
     { width: 1920, quality: 80 },
     { width: 1200, quality: 65 },
     { width: 900,  quality: 50 },
+    { width: 700,  quality: 30 },
   ] as const
 
   for (const { width, quality } of attempts) {
@@ -32,12 +33,9 @@ function originOf(req: NextRequest): string {
 }
 
 // Look up municipality by name; auto-create if not found.
-// Tries exact match first, then partial (e.g. "Αθήνα" inside "Δήμος Αθηναίων"),
-// then falls back to inserting a new row so every region is captured automatically.
 async function resolveMunicipalityId(name: string): Promise<string | null> {
   if (!name) return null
 
-  // 1 — exact case-insensitive match
   const { data: exact } = await supabaseAdmin
     .from('municipalities')
     .select('id')
@@ -45,7 +43,6 @@ async function resolveMunicipalityId(name: string): Promise<string | null> {
     .maybeSingle()
   if (exact) return exact.id
 
-  // 2 — DB row contains the Nominatim name (handles "Δήμος Αθηναίων" ⊃ "Αθήνα")
   const { data: partial } = await supabaseAdmin
     .from('municipalities')
     .select('id')
@@ -54,7 +51,6 @@ async function resolveMunicipalityId(name: string): Promise<string | null> {
     .maybeSingle()
   if (partial) return partial.id
 
-  // 3 — unseen municipality: create it so the admin sees the real location
   const { data: created } = await supabaseAdmin
     .from('municipalities')
     .insert({ name_el: name, name_en: '' })
@@ -64,7 +60,12 @@ async function resolveMunicipalityId(name: string): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
-  const formData = await req.formData()
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
   // ── Honeypot ───────────────────────────────────────────────────────────────
   const honeypot = formData.get('hp_field')?.toString() ?? ''
@@ -77,35 +78,43 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Input validation ───────────────────────────────────────────────────────
-  const imageFile = formData.get('image') as File | null
-  const lat = parseFloat(formData.get('lat')?.toString() ?? '')
-  const lng = parseFloat(formData.get('lng')?.toString() ?? '')
+  const imageFiles = [
+    formData.get('image')  as File | null,
+    formData.get('image2') as File | null,
+    formData.get('image3') as File | null,
+  ].filter((f): f is File => f !== null && f.size > 0)
+
+  const lat      = parseFloat(formData.get('lat')?.toString() ?? '')
+  const lng      = parseFloat(formData.get('lng')?.toString() ?? '')
   const category = formData.get('category')?.toString() ?? ''
   const description = formData.get('description')?.toString().slice(0, 500) || null
 
-  if (!imageFile || isNaN(lat) || isNaN(lng) || !category) {
+  if (imageFiles.length === 0 || isNaN(lat) || isNaN(lng) || !category) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  if (imageFile.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Image too large (max 10 MB)' }, { status: 413 })
-  }
-
-  if (lat < 34.8 || lat > 41.8 || lng < 19.3 || lng > 29.7) {
-    return NextResponse.json({ error: 'Coordinates outside Greece' }, { status: 422 })
+  for (const f of imageFiles) {
+    if (f.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Image too large (max 10 MB)' }, { status: 413 })
+    }
   }
 
   if (!['illegal_dump', 'roadside_litter', 'abandoned_vehicle', 'vandalism', 'other'].includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 422 })
   }
 
-  // ── Image compression ──────────────────────────────────────────────────────
-  let compressed: Buffer
+  // ── Compress all images ────────────────────────────────────────────────────
+  let compressedImages: Buffer[]
   try {
-    const raw = Buffer.from(await imageFile.arrayBuffer())
-    compressed = await compressImage(raw)
-  } catch {
-    return NextResponse.json({ error: 'Image processing failed' }, { status: 422 })
+    compressedImages = await Promise.all(
+      imageFiles.map(async (f) => {
+        const raw = Buffer.from(await f.arrayBuffer())
+        return compressImage(raw)
+      })
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Image processing failed'
+    return NextResponse.json({ error: msg }, { status: 422 })
   }
 
   // ── Token & geocoding ──────────────────────────────────────────────────────
@@ -114,7 +123,7 @@ export async function POST(req: NextRequest) {
 
   // ── Stub mode ──────────────────────────────────────────────────────────────
   if (!isSupabaseConfigured) {
-    console.info(`[stub] report ${publicToken} | ${municipalityName} | ${category} | ${compressed.length} bytes`)
+    console.info(`[stub] report ${publicToken} | ${municipalityName} | ${category} | ${compressedImages.length} image(s)`)
     return NextResponse.json({
       token: publicToken,
       trackingUrl: `${originOf(req)}/r/${publicToken}`,
@@ -122,35 +131,43 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // ── Upload image + resolve municipality in parallel ────────────────────────
-  const [uploadResult, municipalityId] = await Promise.all([
-    supabaseAdmin.storage
-      .from(STORAGE_BUCKET)
-      .upload(`${publicToken}.webp`, compressed, {
-        contentType: 'image/webp',
-        upsert: false,
-      }),
+  // ── Upload all images + resolve municipality in parallel ───────────────────
+  const storagePaths = compressedImages.map((_, i) =>
+    i === 0 ? `${publicToken}.webp` : `${publicToken}_${i + 1}.webp`
+  )
+
+  const [uploadResults, municipalityId] = await Promise.all([
+    Promise.all(
+      compressedImages.map((buf, i) =>
+        supabaseAdmin.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePaths[i], buf, { contentType: 'image/webp', upsert: false })
+      )
+    ),
     resolveMunicipalityId(municipalityName),
   ])
 
-  if (uploadResult.error) {
-    console.error('Storage upload error:', uploadResult.error)
-    return NextResponse.json({ error: 'Storage error' }, { status: 500 })
+  for (const result of uploadResults) {
+    if (result.error) {
+      console.error('Storage upload error:', result.error)
+      return NextResponse.json({ error: 'Storage error' }, { status: 500 })
+    }
   }
 
-  const { data: urlData } = supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(`${publicToken}.webp`)
+  const imageUrls = storagePaths.map((path) =>
+    supabaseAdmin.storage.from(STORAGE_BUCKET).getPublicUrl(path).data.publicUrl
+  )
 
   // ── Insert report ──────────────────────────────────────────────────────────
   const { error: dbErr } = await supabaseAdmin.from('reports').insert({
-    public_token: publicToken,
-    image_url: urlData.publicUrl,
+    public_token:    publicToken,
+    image_url:       imageUrls[0],
+    image_urls:      imageUrls,
     lat,
     lng,
     category,
-    status: 'pending',
-    is_approved: false,
+    status:          'pending',
+    is_approved:     false,
     municipality_id: municipalityId,
     description,
   })
@@ -161,7 +178,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({
-    token: publicToken,
+    token:       publicToken,
     trackingUrl: `${originOf(req)}/r/${publicToken}`,
   })
 }

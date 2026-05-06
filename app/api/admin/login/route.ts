@@ -16,7 +16,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
   }
 
-  if (password !== adminPassword) {
+  const passwordMatch = (() => {
+    try {
+      const { timingSafeEqual } = require('crypto')
+      return password.length === adminPassword.length &&
+        timingSafeEqual(Buffer.from(password), Buffer.from(adminPassword))
+    } catch { return false }
+  })()
+  if (!passwordMatch) {
     const loginUrl = new URL('/admin/login', req.url)
     loginUrl.searchParams.set('error', '1')
     return NextResponse.redirect(loginUrl, { status: 303 })

@@ -20,24 +20,34 @@ async function getStats() {
     const resolved = SEED_REPORTS.filter((r) => r.status === 'resolved').length
     return { total: SEED_REPORTS.length, resolved, municipalities: 14 }
   }
-  const [{ count: total }, { count: resolved }, { count: municipalities }] = await Promise.all([
-    supabaseAdmin.from('reports').select('*', { count: 'exact', head: true }).eq('is_approved', true),
-    supabaseAdmin.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'resolved').eq('is_approved', true),
-    supabaseAdmin.from('municipalities').select('*', { count: 'exact', head: true }),
-  ])
-  return { total: total ?? 0, resolved: resolved ?? 0, municipalities: municipalities ?? 0 }
+  try {
+    const [{ count: total }, { count: resolved }, { count: municipalities }] = await Promise.all([
+      supabaseAdmin.from('reports').select('*', { count: 'exact', head: true }).eq('is_approved', true),
+      supabaseAdmin.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'resolved').eq('is_approved', true),
+      supabaseAdmin.from('municipalities').select('*', { count: 'exact', head: true }),
+    ])
+    return { total: total ?? 0, resolved: resolved ?? 0, municipalities: municipalities ?? 0 }
+  } catch {
+    return { total: 0, resolved: 0, municipalities: 0 }
+  }
 }
 
 async function getLeaderboard(): Promise<{ champions: MunicipalityStat[]; needsWork: MunicipalityStat[] }> {
   if (!isSupabaseConfigured) return { champions: [], needsWork: [] }
 
-  const { data } = await supabaseAdmin
-    .from('reports')
-    .select('status, municipality:municipality_id(name_el)')
-    .eq('is_approved', true)
-    .not('municipality_id', 'is', null)
+  let data: unknown[]
+  try {
+    const result = await supabaseAdmin
+      .from('reports')
+      .select('status, municipality:municipality_id(name_el)')
+      .eq('is_approved', true)
+      .not('municipality_id', 'is', null)
+    data = result.data ?? []
+  } catch {
+    return { champions: [], needsWork: [] }
+  }
 
-  if (!data || data.length === 0) return { champions: [], needsWork: [] }
+  if (data.length === 0) return { champions: [], needsWork: [] }
 
   const map = new Map<string, { total: number; resolved: number }>()
   for (const r of data as unknown as { status: string; municipality: { name_el: string } | null }[]) {

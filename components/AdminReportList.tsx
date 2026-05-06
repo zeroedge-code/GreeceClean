@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { calculateReportPriority } from '@/lib/priority'
+import CategoryBadge from '@/components/CategoryBadge'
 
 export type AdminReport = {
   id: string
@@ -33,11 +35,40 @@ type EditDraft = {
 }
 
 const CATEGORIES: Record<string, string> = {
-  illegal_dump:      'Παράνομη Χωματερή',
-  roadside_litter:   'Σκουπίδια στο Δρόμο',
-  abandoned_vehicle: 'Εγκαταλελειμμένο Όχημα',
-  vandalism:         'Βανδαλισμός',
-  other:             'Άλλο',
+  illegal_dump:        'Παράνομη Χωματερή',
+  construction_debris: 'Μπάζα & Οικοδομικά',
+  roadside_litter:     'Σκουπίδια',
+  plastics:            'Πλαστικά',
+  tires:               'Ελαστικά',
+  appliances:          'Λευκές Συσκευές',
+  abandoned_vehicle:   'Εγκαταλελειμμένο Όχημα',
+  green_waste:         'Κλαδιά & Βλάστηση',
+  bulky_items:         'Ογκώδη Αντικείμενα',
+  coastal_pollution:   'Ρύπανση Ακτής',
+  sewage:              'Λύματα & Χημικά',
+  other:               'Άλλο',
+  vandalism:           'Βανδαλισμός',
+}
+
+function PriorityBadge({ category, createdAt }: { category: string; createdAt: string }) {
+  const priority = calculateReportPriority(category, new Date(createdAt))
+  if (priority === 'urgent') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+        </span>
+        Επείγον
+      </span>
+    )
+  }
+  if (priority === 'medium') {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Μέτρια</span>
+    )
+  }
+  return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Κανονική</span>
 }
 
 const STATUSES: Record<string, string> = {
@@ -86,12 +117,19 @@ export default function AdminReportList({
   async function runAction(id: string, method: 'PATCH' | 'DELETE', body?: object) {
     setLoadingId(id)
     try {
-      await fetch(`/api/admin/report/${id}`, {
+      const res = await fetch(`/api/admin/report/${id}`, {
         method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string }
+        alert(`Σφάλμα: ${data.error ?? `HTTP ${res.status}`}`)
+        return
+      }
       router.refresh()
+    } catch {
+      alert('Σφάλμα δικτύου. Δοκιμάστε ξανά.')
     } finally {
       setLoadingId(null)
     }
@@ -164,6 +202,7 @@ export default function AdminReportList({
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Token</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Δήμος</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Κατηγορία</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600">Προτεραιότητα</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Κατάσταση</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Ημερομηνία</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Ενέργειες</th>
@@ -171,10 +210,9 @@ export default function AdminReportList({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {reports.map((r) => (
-              <>
+              <Fragment key={r.id}>
                 <tr
-                  key={r.id}
-                  className={`hover:bg-gray-50 transition-colors ${loadingId === r.id ? 'opacity-50 pointer-events-none' : ''}`}
+                  className={`hover:bg-gray-50 transition-colors ${loadingId === r.id ? 'opacity-50 pointer-events-none' : ''} ${calculateReportPriority(r.category, new Date(r.created_at)) === 'urgent' ? 'bg-red-50/40' : ''}`}
                 >
                   <td className="px-4 py-3">
                     {r.image_url ? (
@@ -186,12 +224,19 @@ export default function AdminReportList({
                   <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.public_token}</td>
                   <td className="px-4 py-3 text-gray-800">{r.municipality?.name_el ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">
-                    <div>{CATEGORIES[r.category] ?? r.category}</div>
+                    <CategoryBadge
+                      categoryId={r.category}
+                      label={CATEGORIES[r.category] ?? r.category}
+                      size="sm"
+                    />
                     {r.description && (
                       <div className="text-xs text-gray-400 mt-0.5 max-w-[180px] truncate" title={r.description}>
                         {r.description}
                       </div>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <PriorityBadge category={r.category} createdAt={r.created_at} />
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -278,8 +323,8 @@ export default function AdminReportList({
 
                 {/* ── Inline edit row ── */}
                 {editingId === r.id && (
-                  <tr key={`${r.id}-edit`} className="bg-blue-50 border-t border-blue-100">
-                    <td colSpan={7} className="px-4 py-4">
+                  <tr className="bg-blue-50 border-t border-blue-100">
+                    <td colSpan={8} className="px-4 py-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">Κατηγορία</label>
@@ -342,7 +387,7 @@ export default function AdminReportList({
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>

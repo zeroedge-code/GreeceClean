@@ -87,7 +87,10 @@ export type Dictionary = {
     successDesc: string
     successLinkLabel: string
     successMapLink: string
+    successAnother: string
     categories: Array<{ id: string; label: string; icon: string }>
+    /** Display labels for all known category IDs (including legacy). */
+    categoryLabels: Record<string, string>
   }
 
   map: {

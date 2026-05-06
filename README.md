@@ -70,10 +70,23 @@ The tracking page includes one-tap **WhatsApp sharing** and a copy-link button, 
 
 | Step | What happens |
 |------|-------------|
-| **1 · Category** | Tap one of 5 report types (illegal dump, roadside litter, abandoned vehicle, vandalism, other) |
-| **2 · Photos** | Capture or upload up to **3 photos**; the app compresses them client-side (max 1,200 px) to stay within mobile data budgets |
-| **3 · Location** | GPS fires automatically; a Leaflet map appears instantly with a draggable pin — tap the map to adjust |
-| **4 · Submit** | Optional description, then submit. Done. |
+| **1 · Category** | Tap one of **11 report types**: Illegal Dump, Construction Debris, Roadside Litter, Plastics, Tires, Appliances, Abandoned Vehicle, Green Waste, Bulky Items, Coastal Pollution, Sewage (+ Other). Auto-advances on tap. |
+| **2 · Photos** | Capture or upload up to **3 photos**; reorder with ←→ buttons; EXIF GPS is scanned on each upload. Images are compressed server-side (WebP, ≤ 500 KB). |
+| **3 · Location** | GPS fires automatically on mount; a Leaflet map opens immediately when GPS resolves — draggable pin + Nominatim search bar. |
+| **4 · Submit** | Optional description, then submit (or tap "Skip description & submit →"). Done. |
+
+### 🧠 Smart Priority System
+
+Reports are automatically assigned a priority level at submission time based on category and season:
+
+| Priority | Categories | Notes |
+|----------|-----------|-------|
+| 🔴 **Urgent** | `sewage`, `illegal_dump` | Always urgent — health/environmental hazard |
+| 🔴 **Urgent (seasonal)** | `green_waste` | Urgent during Greek fire season (May 1 – Oct 31) |
+| 🟡 **Medium** | `construction_debris`, `abandoned_vehicle`, `coastal_pollution` | Moderate impact |
+| ⚪ **Normal** | All other categories | Standard queue |
+
+Priority is displayed in the admin dashboard with a pulsing red beacon for urgent rows. Logic lives in `lib/priority.ts`.
 
 ### 📍 EXIF-Based Location Detection
 
@@ -197,11 +210,14 @@ Fill in the values — see [Environment Variables](#environment-variables) below
 Run the following SQL files **in order** in your Supabase SQL editor:
 
 ```bash
-supabase/schema.sql            # Tables, RLS, indexes, triggers
-supabase/email_notifications.sql  # email_logs table + region column
-supabase/seed_municipalities.sql  # Pre-loaded Greek municipalities with emails
-supabase/seed.sql              # (Optional) 27 sample reports for development
+supabase/schema.sql                             # Tables, RLS, indexes, triggers
+supabase/email_notifications.sql                # email_logs table + region column
+supabase/seed_municipalities.sql                # Pre-loaded Greek municipalities with emails
+supabase/migrations/001_postgis_geometry.sql    # PostGIS extension, geometry columns, spatial indexes & triggers
+supabase/seed.sql                               # (Optional) 27 sample reports for development
 ```
+
+> **Note:** The PostGIS migration requires the `postgis` extension to be enabled in your Supabase project (available on all paid plans and the free tier via the Supabase dashboard under **Database → Extensions**).
 
 ### 5. Run Development Server
 
@@ -263,7 +279,6 @@ All UI strings must be added to all three translation files (`lib/i18n/el.ts`, `
 
 | Feature | Priority | Notes |
 |---------|:--------:|-------|
-| 📧 **Municipality auto-notification** | 🔴 High | Auto-email on approval (not just on manual forward) |
 | 🗺️ **Cluster map** | 🔴 High | Group nearby pins for better large-scale map readability |
 | 📄 **PDF report export** | 🟡 Medium | One-page formatted report for printing / official submission |
 | 🔔 **Status push notifications** | 🟡 Medium | Browser / PWA notification when report status changes |
@@ -272,6 +287,13 @@ All UI strings must be added to all three translation files (`lib/i18n/el.ts`, `
 | 📊 **Analytics dashboard** | 🟢 Low | Heatmaps by region, time-to-resolution trends |
 | 🌍 **Multi-country expansion** | 🟢 Low | Albania, Bulgaria, North Macedonia with their own municipality data |
 | 🤖 **AI category detection** | 🟢 Low | Auto-suggest category from photo using vision API |
+
+### Already shipped (previously roadmap items)
+
+| Feature | Status | Notes |
+|---------|:------:|-------|
+| 📧 **Municipality email forwarding** | ✅ Live | Auto-email sent by admin on approval via Resend |
+| 🏙️ **PostGIS municipality auto-assignment** | ✅ Live | `ST_Within` spatial query auto-assigns `municipality_id` from boundary polygons on insert/update |
 
 ---
 

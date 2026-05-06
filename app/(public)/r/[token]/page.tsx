@@ -3,6 +3,7 @@ import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { SEED_REPORTS } from '@/lib/seed-data'
 import { getLocale, getDictionary } from '@/lib/i18n'
 import CopyButton from '@/components/CopyButton'
+import CategoryBadge from '@/components/CategoryBadge'
 
 type Report = {
   public_token: string
@@ -169,16 +170,23 @@ export default async function TrackingPage({
               <a href={`/r/${nearbyLeft.public_token}`}
                 className="flex-1 card flex items-center gap-3 py-3 px-4 hover:bg-gray-50 active:bg-gray-100 transition-colors no-underline">
                 <span className="text-gray-400 text-lg leading-none">←</span>
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-400 mb-0.5">
-                    {nearbyLeft.distanceKm < 1
-                      ? `${Math.round(nearbyLeft.distanceKm * 1000)} m`
-                      : `${nearbyLeft.distanceKm.toFixed(1)} km`}
-                  </p>
-                  <p className="text-sm font-semibold text-primary truncate">
-                    {tr.categories[nearbyLeft.category as keyof typeof tr.categories] ?? nearbyLeft.category}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate">{nearbyLeft.municipality?.name_el ?? ''}</p>
+                <div className="min-w-0 flex items-center gap-2">
+                  <CategoryBadge
+                    categoryId={nearbyLeft.category}
+                    label=""
+                    size="sm"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400 mb-0.5">
+                      {nearbyLeft.distanceKm < 1
+                        ? `${Math.round(nearbyLeft.distanceKm * 1000)} m`
+                        : `${nearbyLeft.distanceKm.toFixed(1)} km`}
+                    </p>
+                    <p className="text-sm font-semibold text-primary truncate">
+                      {tr.categories[nearbyLeft.category as keyof typeof tr.categories] ?? nearbyLeft.category}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">{nearbyLeft.municipality?.name_el ?? ''}</p>
+                  </div>
                 </div>
               </a>
             ) : <div className="flex-1" />}
@@ -186,16 +194,23 @@ export default async function TrackingPage({
             {nearbyRight ? (
               <a href={`/r/${nearbyRight.public_token}`}
                 className="flex-1 card flex items-center gap-3 py-3 px-4 hover:bg-gray-50 active:bg-gray-100 transition-colors no-underline text-right justify-end">
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-400 mb-0.5">
-                    {nearbyRight.distanceKm < 1
-                      ? `${Math.round(nearbyRight.distanceKm * 1000)} m`
-                      : `${nearbyRight.distanceKm.toFixed(1)} km`}
-                  </p>
-                  <p className="text-sm font-semibold text-primary truncate">
-                    {tr.categories[nearbyRight.category as keyof typeof tr.categories] ?? nearbyRight.category}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate">{nearbyRight.municipality?.name_el ?? ''}</p>
+                <div className="min-w-0 flex items-center gap-2 justify-end">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400 mb-0.5">
+                      {nearbyRight.distanceKm < 1
+                        ? `${Math.round(nearbyRight.distanceKm * 1000)} m`
+                        : `${nearbyRight.distanceKm.toFixed(1)} km`}
+                    </p>
+                    <p className="text-sm font-semibold text-primary truncate">
+                      {tr.categories[nearbyRight.category as keyof typeof tr.categories] ?? nearbyRight.category}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">{nearbyRight.municipality?.name_el ?? ''}</p>
+                  </div>
+                  <CategoryBadge
+                    categoryId={nearbyRight.category}
+                    label=""
+                    size="sm"
+                  />
                 </div>
                 <span className="text-gray-400 text-lg leading-none">→</span>
               </a>
@@ -234,7 +249,13 @@ export default async function TrackingPage({
           <dl className="text-sm text-gray-600 space-y-1.5">
             <div className="flex gap-2">
               <dt className="font-medium shrink-0">{tr.labelCategory}</dt>
-              <dd>{tr.categories[report.category] ?? report.category}</dd>
+              <dd>
+                <CategoryBadge
+                  categoryId={report.category}
+                  label={tr.categories[report.category] ?? report.category}
+                  size="sm"
+                />
+              </dd>
             </div>
             {report.municipality && (
               <div className="flex gap-2">

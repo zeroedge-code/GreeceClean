@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import exifr from 'exifr'
 import type { Dictionary } from '@/lib/i18n/types'
+import { CATEGORY_META } from '@/lib/categories'
 
 type FormTranslations = Dictionary['form']
 type CopyTranslations = Dictionary['copy']
@@ -288,21 +289,26 @@ export default function ReportForm({
           <h2 className="text-2xl font-bold text-primary mb-1">{t.categoryTitle}</h2>
           <p className="text-gray-500 text-sm mb-6">{t.categoryDesc}</p>
 
-          <div className="grid grid-cols-2 gap-3">
-            {t.categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setCategory(cat.id)
-                  saveDraft({ category: cat.id })
-                  setStep('photos')
-                }}
-                className="card p-4 text-left flex flex-col gap-2 transition-all duration-150 border-2 border-transparent hover:border-primary/30 hover:bg-primary/5 active:scale-95"
-              >
-                <span className="text-3xl leading-none">{cat.icon}</span>
-                <span className="text-sm font-semibold text-gray-800 leading-snug">{cat.label}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-3 gap-3">
+            {t.categories.map((cat) => {
+              const meta = CATEGORY_META[cat.id]
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    setCategory(cat.id)
+                    saveDraft({ category: cat.id })
+                    setStep('photos')
+                  }}
+                  className={`rounded-2xl p-3 text-left flex flex-col gap-2 transition-all duration-150 border-2 border-transparent active:scale-95 hover:scale-105 ${meta?.bgColor ?? 'bg-gray-50'} ${meta?.borderHover ?? 'hover:border-gray-300'}`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${meta?.iconBg ?? 'bg-gray-100'}`}>
+                    <span className="text-xl leading-none">{cat.icon}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-gray-800 leading-snug">{cat.label}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -529,7 +535,7 @@ export default function ReportForm({
       {step === 'success' && (
         <div className="text-center py-4">
           <div className="text-7xl mb-5 animate-bounce">✅</div>
-          <h2 className="text-2xl font-bold text-primary mb-2">{t.successTitle}</h2>
+          <h2 className="text-2xl font-bold text-primary mb-3">{t.successTitle}</h2>
           <p className="text-gray-500 text-sm mb-8 max-w-sm mx-auto">{t.successDesc}</p>
 
           <div className="card bg-gray-50 mb-6 text-left">
@@ -544,6 +550,22 @@ export default function ReportForm({
               {copied ? ct.copied : ct.copy}
             </button>
           </div>
+
+          <button
+            onClick={() => {
+              setStep('category')
+              setCategory(null)
+              setPhotos([])
+              setExifCoords(null)
+              setCoords(null)
+              setDescription('')
+              setTrackingUrl('')
+              setCopied(false)
+            }}
+            className="w-full btn-primary mb-4"
+          >
+            {t.successAnother}
+          </button>
 
           <a href="/map" className="text-sm text-primary hover:underline">{t.successMapLink}</a>
         </div>

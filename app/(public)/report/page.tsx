@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default async function ReportPage() {
   const locale = await getLocale()
-  const { form: f } = getDictionary(locale)
+  const { form: f, copy: c } = getDictionary(locale)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -18,7 +18,7 @@ export default async function ReportPage() {
           <h1 className="text-3xl font-extrabold text-primary">{f.pageTitle}</h1>
           <p className="text-gray-500 text-sm mt-1">{f.pageSubtitle}</p>
         </div>
-        <ReportForm translations={f} />
+        <ReportForm translations={f} copyTranslations={c} />
       </div>
     </div>
   )

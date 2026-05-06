@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { reverseGeocode } from '@/lib/geocoding'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { VALID_CATEGORIES } from '@/lib/categories'
 
 const MAX_BYTES = 500 * 1024 // 500 KB per image
 const STORAGE_BUCKET = 'reports'
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!['illegal_dump', 'roadside_litter', 'abandoned_vehicle', 'vandalism', 'other'].includes(category)) {
+  if (!VALID_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 422 })
   }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { sendEmail } from '@/lib/email'
 import { buildMunicipalityReportEmail, type ReportForEmail } from '@/lib/emailTemplates'
+import { VALID_CATEGORIES } from '@/lib/categories'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -11,15 +12,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params
-  const body = (await req.json()) as {
+  let body: {
     action?: string
     category?: string
     status?: string
     municipality_id?: string | null
     description?: string | null
   }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
 
-  const VALID_CATEGORIES = ['illegal_dump', 'roadside_litter', 'abandoned_vehicle', 'vandalism', 'other']
   const VALID_STATUSES = ['pending', 'in_review', 'forwarded', 'resolved', 'rejected']
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

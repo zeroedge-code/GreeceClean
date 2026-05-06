@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 function isValidSession(token: string | undefined): boolean {
   const adminPassword = process.env.ADMIN_PASSWORD
   const cookieSecret = process.env.ADMIN_COOKIE_SECRET
   if (!token || !adminPassword || !cookieSecret) return false
   const expected = createHmac('sha256', cookieSecret).update(adminPassword).digest('hex')
-  return token === expected
+  try {
+    return token.length === expected.length &&
+      timingSafeEqual(Buffer.from(token), Buffer.from(expected))
+  } catch { return false }
 }
 
-export function proxy(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-
-  // Only guard /admin paths; allow the login page and auth API routes through
-  if (!pathname.startsWith('/admin') && !pathname.startsWith('/api/admin/login') && !pathname.startsWith('/api/admin/logout')) {
-    return NextResponse.next()
-  }
 
   const isAuthRoute =
     pathname === '/admin/login' ||

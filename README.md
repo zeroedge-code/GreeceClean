@@ -375,12 +375,6 @@ lib/i18n/types.ts
 
 ---
 
-## License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
----
-
 ## Acknowledgements
 
 GreeceClean is built with open civic technology principles and open web infrastructure, including OpenStreetMap, Leaflet, Supabase, Next.js, and the broader open-source ecosystem.
